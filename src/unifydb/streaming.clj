@@ -1,4 +1,5 @@
-(ns unifydb.streaming)
+(ns unifydb.streaming
+  (:require [manifold.stream :as s]))
 
 (defprotocol StreamingBackend
   "The streaming backend provides asynchronous stream operations."
@@ -8,3 +9,6 @@
      to the set of second items in each stream, until any one of the
      streams is exhausted. Any remaining items in other streams are ignored.
      Function f should accept number-of-streams arguments"))
+
+(defn mapcat [backend f & streams]
+  (apply s/concat (apply map backend f streams)))
