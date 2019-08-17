@@ -1,9 +1,9 @@
 (ns unifydb.storage)
 
-(defprotocol StorageBackend
+(defprotocol IStorageBackend
   "The storage backend persists facts and rules"
-  (store-facts! [store facts] "Stores `facts` in `store`.")
-  (store-rules! [store rules] "Stores `rules` in `store`.")
+  (transact-facts! [store facts] "Stores `facts` in `store`.")
+  (transact-rules! [store rules] "Stores `rules` in `store`.")
   (fetch-facts [store query tx-id]
     "Retrieves the facts persisted as of the transaction
      denoted by `tx-id` that might unify with `query` from
