@@ -1,10 +1,10 @@
 (ns unifydb.streaming.threadpool
   (:require [clojure.core :as core]
             [manifold.stream :as s]
-            [unifydb.streaming :refer [StreamingBackend]]))
+            [unifydb.streaming :as streaming]))
 
 (defrecord ThreadpoolStreamingBackend []
-  StreamingBackend
+  streaming/IStreamingBackend
   (map [backend f stream]
     (pmap f (s/stream->seq stream))))
 
