@@ -6,7 +6,7 @@
 (defrecord ThreadpoolStreamingBackend []
   streaming/IStreamingBackend
   (map [backend f stream]
-    (pmap f (s/stream->seq stream))))
+    (s/->source (pmap f (s/stream->seq stream)))))
 
 (defn new []
   (->ThreadpoolStreamingBackend))
