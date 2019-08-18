@@ -1,4 +1,4 @@
-(ns unifydb.memory-test
+(ns unifydb.storage.memory-test
   (:require [clojure.test :refer [deftest is]]
             [manifold.stream :as stream]
             [me.tonsky.persistent-sorted-set :as set]
