@@ -9,6 +9,14 @@
 (defn var-name [var]
   (when (var? var) (second var)))
 
+(defn frame-binding [frame var]
+  "Returns the binding for `var` in `frame` or nil."
+  (get frame var))
+
+(defn extend-frame [frame var val]
+  "Binds `var` to `val` in `frame`."
+  (assoc frame (var-name var) val))
+
 (defn instantiate [query frame unbound-var-handler]
   "Instantiates the `query` with the bindings in `frame`,
    calling `unbound-var-handler` if there exists a variable
