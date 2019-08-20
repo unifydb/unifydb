@@ -17,7 +17,7 @@
   "Binds `var` to `val` in `frame`."
   (assoc frame (var-name var) val))
 
-(defn instantiate [query frame unbound-var-handler]
+(defn instantiate [frame query unbound-var-handler]
   "Instantiates the `query` with the bindings in `frame`,
    calling `unbound-var-handler` if there exists a variable
    in the query with no binding in the frame."

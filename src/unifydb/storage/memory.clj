@@ -45,22 +45,31 @@
    (fact-tx-id mfact)
    (fact-added? mfact)])
 
+(defn cmp-fact-vec [fact1 fact2]
+  "Like `compare`, but nil always has 0 (equal) priority instead of the least"
+  (cond
+    (nil? fact1) 0
+    (nil? fact2) 0
+    (and (coll? fact1) (coll? fact2)) (if (= (count fact1) (count fact2))
+                                        (if (empty? fact1)
+                                          0
+                                          (let [cmp (cmp-fact-vec (first fact1)
+                                                                  (first fact2))]
+                                            (if (= cmp 0)
+                                              (cmp-fact-vec (rest fact1) (rest fact2))
+                                              cmp)))
+                                        (- (count fact1) (count fact2)))
+    (not (= (type fact1) (type fact2))) (- (hash fact1) (hash fact2))
+    :else (compare fact1 fact2)))
+
 (defn compare-fact-by [fact1 fact2 & fns]
-  (compare (vec (map #(% fact1) fns))
-           (vec (map #(% fact2) fns))))
+  (cmp-fact-vec (vec (map #(% fact1) fns))
+                (vec (map #(% fact2) fns))))
 
 (defn cmp-fact-eavt [fact1 fact2]
   (compare-fact-by fact1 fact2
                    fact-entity
                    fact-attribute
-                   fact-value
-                   fact-tx-id
-                   fact-added?))
-
-(defn cmp-fact-aevt [fact1 fact2]
-  (compare-fact-by fact1 fact2
-                   fact-attribute
-                   fact-entity
                    fact-value
                    fact-tx-id
                    fact-added?))
@@ -93,31 +102,13 @@
                          tx-id)
            ;; e ? ?
            [(false :<< var?) (true :<< var?) (true :<< var?)]
-           (filter-by-tx (set/slice eavt {:entity entity} {:entity entity}) tx-id)
+           (filter-by-tx (set/slice eavt
+                                    {:entity entity}
+                                    {:entity entity})
+                         tx-id)
            ;; ? ? ?
            [_ _ _]
            (filter-by-tx eavt tx-id))))
-
-(defn fetch-facts-aevt [aevt query tx-id]
-  (let [[entity attribute value] query]
-    (match [entity attribute value]
-           ;; a e v
-           [(false :<< var?) (false :<< var?) (false :<< var?)]
-           (set/slice aevt
-                      {:attribute attribute :entity entity :value value :tx-id 0}
-                      {:attribute attribute :entity entity :value value :tx-id tx-id})
-           ;; a e ?
-           [(false :<< var?) (false :<< var?) (true :<< var?)]
-           (filter-by-tx (set/slice aevt
-                                    {:attribute attribute :entity entity}
-                                    {:attribute attribute :entity entity})
-                         tx-id)
-           ;; a ? ?
-           [(false :<< var?) (true :<< var?) (true :<< var?)]
-           (filter-by-tx (set/slice aevt {:attribute attribute} {:attribute attribute}) tx-id)
-           ;; ? ? ?
-           [_ _ _]
-           (filter-by-tx aevt tx-id))))
 
 (defn fetch-facts-avet [avet query tx-id]
   (let [[entity attribute value] query]
@@ -128,56 +119,51 @@
                       {:attribute attribute :value value :entity entity :tx-id 0}
                       {:attribute attribute :value value :entity entity :tx-id tx-id})
            ;; a v ?
-           [(false :<< var?) (false :<< var?) (true :<< var?)]
+           [(true :<< var?) (false :<< var?) (false :<< var?)]
            (filter-by-tx (set/slice avet
                                     {:attribute attribute :value value}
                                     {:attribute attribute :value value})
                          tx-id)
            ;; a ? ?
-           [(false :<< var?) (true :<< var?) (true :<< var?)]
-           (filter-by-tx (set/slice avet {:attribute attribute} {:attribute attribute}) tx-id)
+           [(true :<< var?) (false :<< var?) (true :<< var?)]
+           (filter-by-tx (set/slice avet
+                                    {:attribute attribute}
+                                    {:attribute attribute})
+                         tx-id)
            ;; ? ? ?
            [_ _ _]
            (filter-by-tx avet tx-id))))
 
 (defn fetch-facts-from-index [db query tx-id]
   (let [eavt @(:eavt db)
-        aevt @(:aevt db)
         avet @(:avet db)
         [entity attribute] query]
     (match [entity attribute]
-           ;; e a
-           [(false :<< var?) (false :<< var?)]
-           (fetch-facts-aevt aevt query tx-id)
-           ;; e ?
-           [(false :<< var?) (true :<< var?)]
-           (fetch-facts-eavt eavt query tx-id)
-           ;; ? a
+           ;; (? a v), (? a ?)
            [(true :<< var?) (false :<< var?)]
            (fetch-facts-avet avet query tx-id)
-           ;; ? ?
+           ;; (e a v), (e a ?), (e ? v), (e ? ?), (? ? v), (? ? ?)
            [_ _]
            (fetch-facts-eavt eavt query tx-id))))
 
-(defrecord InMemoryStorageBackend [eavt aevt avet id-counter]
+(defrecord InMemoryStorageBackend [eavt avet id-counter]
   storage/IStorageBackend
   (transact-facts! [self facts]
     (let [mfacts (map vec->fact facts)]
-      (doseq [idx [(:eavt self) (:aevt self) (:avet self)]]
+      (doseq [idx [(:eavt self) (:avet self)]]
         (swap! idx #(into %1 mfacts))))
     self)
   (transact-rules! [self rules])
   (fetch-facts [self query tx-id frame]
-    (let [instantiated (binding/instantiate query frame (fn [v f] v))]
+    (let [instantiated (binding/instantiate frame query (fn [v f] v))]
       (stream/->source
        (map fact->vec
-            (fetch-facts-from-index self query tx-id)))))
+            (fetch-facts-from-index self instantiated tx-id)))))
   (fetch-rules [self query tx-id frame])
   (get-next-id [self] (swap! (:id-counter self) inc)))
 
 (defn new []
   (->InMemoryStorageBackend
    (atom (set/sorted-set-by cmp-fact-eavt))
-   (atom (set/sorted-set-by cmp-fact-aevt))
    (atom (set/sorted-set-by cmp-fact-avet))
    (atom 0)))
