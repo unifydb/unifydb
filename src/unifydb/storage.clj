@@ -7,7 +7,8 @@
   (fetch-facts [store query tx-id frame]
     "Retrieves the facts persisted as of the transaction
      denoted by `tx-id` that might unify with `query` from
-     the `store` given the bindings in `frame`.")
+     the `store` given the bindings in `frame`. Does not return
+     facts that have been retracted.")
   (fetch-rules [store query tx-id frame]
     "Retrieves the rules persisted as of the transaction
      denoted by `tx-id` whose conditions might unify with `query`
