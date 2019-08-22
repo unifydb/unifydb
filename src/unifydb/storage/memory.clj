@@ -3,6 +3,7 @@
             [manifold.stream :as stream]
             [me.tonsky.persistent-sorted-set :as set]
             [unifydb.binding :as binding :refer [var?]]
+            [unifydb.util :as util]
             [unifydb.storage :as storage]))
 
 ;; A fact is a map with the keys
@@ -39,11 +40,13 @@
                attr-to-idxs))))
 
 (defn fact->vec [mfact]
-  [(fact-entity mfact)
-   (fact-attribute mfact)
-   (fact-value mfact)
-   (fact-tx-id mfact)
-   (fact-added? mfact)])
+  (map
+   #(when-not (has-var? %1) %1)
+   [(fact-entity mfact)
+    (fact-attribute mfact)
+    (fact-value mfact)
+    (fact-tx-id mfact)
+    (fact-added? mfact)]))
 
 (defn cmp-fact-vec [fact1 fact2]
   "Like `compare`, but nil always has 0 (equal) priority instead of the least"
@@ -86,22 +89,32 @@
   "Filters out all `facts` with tx-id less than or equal to `tx-id`."
   (filter #(<= (fact-tx-id %1) tx-id) facts))
 
+(defn has-var? [exp]
+  "Returns true if the expression variables"
+  (letfn [(tree-walk [node]
+            (cond
+              (var? node) true
+              (util/not-nil-seq? node) (or (tree-walk (first node))
+                                           (tree-walk (rest node)))
+              :else false))]
+    (tree-walk exp)))
+
 (defn fetch-facts-eavt [eavt query tx-id]
   (let [[entity attribute value] query]
     (match [entity attribute value]
            ;; e a v
-           [(false :<< var?) (false :<< var?) (false :<< var?)]
+           [(false :<< has-var?) (false :<< has-var?) (false :<< has-var?)]
            (set/slice eavt
                       {:entity entity :attribute attribute :value value :tx-id 0}
                       {:entity entity :attribute attribute :value value :tx-id tx-id})
            ;; e a ?
-           [(false :<< var?) (false :<< var?) (true :<< var?)]
+           [(false :<< has-var?) (false :<< has-var?) (true :<< has-var?)]
            (filter-by-tx (set/slice eavt
                                     {:entity entity :attribute attribute}
                                     {:entity entity :attribute attribute})
                          tx-id)
            ;; e ? ?
-           [(false :<< var?) (true :<< var?) (true :<< var?)]
+           [(false :<< has-var?) (true :<< has-var?) (true :<< has-var?)]
            (filter-by-tx (set/slice eavt
                                     {:entity entity}
                                     {:entity entity})
@@ -114,18 +127,18 @@
   (let [[entity attribute value] query]
     (match [entity attribute value]
            ;; a v e
-           [(false :<< var?) (false :<< var?) (false :<< var?)]
+           [(false :<< has-var?) (false :<< has-var?) (false :<< has-var?)]
            (set/slice avet
                       {:attribute attribute :value value :entity entity :tx-id 0}
                       {:attribute attribute :value value :entity entity :tx-id tx-id})
            ;; a v ?
-           [(true :<< var?) (false :<< var?) (false :<< var?)]
+           [(true :<< has-var?) (false :<< has-var?) (false :<< has-var?)]
            (filter-by-tx (set/slice avet
                                     {:attribute attribute :value value}
                                     {:attribute attribute :value value})
                          tx-id)
            ;; a ? ?
-           [(true :<< var?) (false :<< var?) (true :<< var?)]
+           [(true :<< has-var?) (false :<< has-var?) (true :<< has-var?)]
            (filter-by-tx (set/slice avet
                                     {:attribute attribute}
                                     {:attribute attribute})
@@ -140,7 +153,7 @@
         [entity attribute] query]
     (match [entity attribute]
            ;; (? a v), (? a ?)
-           [(true :<< var?) (false :<< var?)]
+           [(true :<< has-var?) (false :<< has-var?)]
            (fetch-facts-avet avet query tx-id)
            ;; (e a v), (e a ?), (e ? v), (e ? ?), (? ? v), (? ? ?)
            [_ _]

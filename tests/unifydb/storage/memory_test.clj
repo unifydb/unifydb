@@ -63,6 +63,11 @@
               :frame {}
               :expected [[1 :job [:computer :wizard] 0 true]
                          [1 :name "Ben Bitdiddle" 0 true]]}
+             {:query '[[? e] :job [:computer [? what]]]
+              :tx-id 3
+              :frame {}
+              :expected [[2 :job [:computer :programmer] 2 true]
+                         [1 :job [:computer :wizard] 0 true]]}
              {:query '[2 :address [? v]]
               :tx-id 3
               :frame {}

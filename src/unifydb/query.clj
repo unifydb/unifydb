@@ -8,6 +8,9 @@
 
 (declare qeval)
 
+(defn empty-stream []
+  (s/->source []))
+
 (defn conjoin [db conjuncts frames]
   "Evaluates the conjunction (logical AND) of all `conjuncts` in the context of `frames`.
    Returns a stream of frames."
@@ -21,9 +24,10 @@
   "Evaluates the disjunctions (logical OR) of all `disjuncts` in the context of `frames`.
    Returns a stream of frames."
   (if (empty? disjuncts)
-    nil
-    (s/concat (qeval db (first disjuncts) frames)
-              (disjoin db (rest disjuncts) frames))))
+    (empty-stream)
+    ;; TODO this call to concat is hanging forever - is the stream never getting realized?
+    (s/concat [(qeval db (first disjuncts) frames)
+               (disjoin db (rest disjuncts) frames)])))
 
 ;; This is a shitty implementation of negation because it acts only as a filter,
 ;; meaning it is only valid as one of the subsequent clauses in an :and query.
@@ -38,7 +42,7 @@
    those frames for which evaluation fails (i.e. for which the logic query cannot be made true)."
   (s/mapcat
    (fn [frame]
-     (if (empty? (qeval db (first operands) (s/->source [frame])))
+     (if (empty? (s/stream->seq (qeval db (first operands) (s/->source [frame]))))
        [frame]
        []))
    frames))
@@ -53,7 +57,7 @@
    (fn [fact]
      (let [match-result (unify/unify-match query fact frame)]
        (if (= match-result :failed)
-         (s/->source [])
+         (empty-stream)
          (s/->source [match-result]))))
    (s/map
     #(vector (nth %1 0) (nth %1 1) (nth %1 2))

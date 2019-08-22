@@ -34,10 +34,10 @@
               :expected '[{e 1}]}
              {:query '[[? e] :job [:computer [? what]]]
               :db db-latest
-              :expected '[{e 1
-                           what :wizard}
-                          {e 2
-                           what :programmer}]}
+              :expected '[{e 2
+                           what :programmer}
+                          {e 1
+                           what :wizard}]}
              {:query '[:and
                        [[? e] :job [:computer [? what]]]
                        [[? e] :salary 60000]]
