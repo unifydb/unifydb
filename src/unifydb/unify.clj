@@ -48,7 +48,7 @@
    unbound.
    
    For example, (unify-match '[?a ?b foo ?f] '[?c [?d bar] ?e ?f] {}) yields
-   the new frame '{a [?c], b [?d bar], e foo}, leaving f unbound."
+   the new frame '{a ?c, b [?d bar], e foo}, leaving f unbound."
   (cond
     ;; If the unification has already failed, short-circuit
     (= frame :failed) :failed
