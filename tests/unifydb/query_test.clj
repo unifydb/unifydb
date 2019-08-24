@@ -1,6 +1,5 @@
 (ns unifydb.query-test
   (:require [clojure.test :refer [deftest is]]
-            [manifold.stream :as stream]
             [unifydb.query :as query]
             [unifydb.storage :as store]
             [unifydb.storage.memory :as memstore]
@@ -54,7 +53,7 @@
                        [[? e] :job [:computer [? what]]]
                        [:not [[? e] :salary 60000]]]
               :db db-latest
-              :expected '[{e 1
+              :expected '[{e 2
                            what :programmer}]}
              {:query '[1 :address [[? town] & [? road-and-number]]]
               :db db-latest
@@ -67,6 +66,5 @@
              {:query '[2 :address [[? town] & [? road-and-number]]]
               :db db-latest
               :expected '[]}]]
-      (is (= (stream/stream->seq
-              (query/query db query))
+      (is (= (query/query db query)
              expected)))))

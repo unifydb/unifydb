@@ -1,6 +1,5 @@
 (ns unifydb.storage.memory
   (:require [clojure.core.match :refer [match]]
-            [manifold.stream :as stream]
             [me.tonsky.persistent-sorted-set :as set]
             [unifydb.binding :as binding :refer [var?]]
             [unifydb.util :as util]
@@ -38,6 +37,16 @@
     (into {}
           (map (fn [[attr idx]] [attr (nth vfact idx)])
                attr-to-idxs))))
+
+(defn has-var? [exp]
+  "Returns true if the expression variables"
+  (letfn [(tree-walk [node]
+            (cond
+              (var? node) true
+              (util/not-nil-seq? node) (or (tree-walk (first node))
+                                           (tree-walk (rest node)))
+              :else false))]
+    (tree-walk exp)))
 
 (defn fact->vec [mfact]
   (map
@@ -88,16 +97,6 @@
 (defn filter-by-tx [facts tx-id]
   "Filters out all `facts` with tx-id less than or equal to `tx-id`."
   (filter #(<= (fact-tx-id %1) tx-id) facts))
-
-(defn has-var? [exp]
-  "Returns true if the expression variables"
-  (letfn [(tree-walk [node]
-            (cond
-              (var? node) true
-              (util/not-nil-seq? node) (or (tree-walk (first node))
-                                           (tree-walk (rest node)))
-              :else false))]
-    (tree-walk exp)))
 
 (defn fetch-facts-eavt [eavt query tx-id]
   (let [[entity attribute value] query]
@@ -169,9 +168,8 @@
   (transact-rules! [self rules])
   (fetch-facts [self query tx-id frame]
     (let [instantiated (binding/instantiate frame query (fn [v f] v))]
-      (stream/->source
-       (map fact->vec
-            (fetch-facts-from-index self instantiated tx-id)))))
+      (map fact->vec
+           (fetch-facts-from-index self instantiated tx-id))))
   (fetch-rules [self query tx-id frame])
   (get-next-id [self] (swap! (:id-counter self) inc)))
 

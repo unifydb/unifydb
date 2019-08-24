@@ -1,6 +1,5 @@
 (ns unifydb.storage.memory-test
   (:require [clojure.test :refer [deftest is]]
-            [manifold.stream :as stream]
             [me.tonsky.persistent-sorted-set :as set]
             [unifydb.storage.memory :as mem]
             [unifydb.storage :as store]))
@@ -72,5 +71,5 @@
               :tx-id 3
               :frame {}
               :expected [[2 :address [:cambridge [:mass :ave] 78] 3 false]]}]]
-      (is (= (stream/stream->seq (store/fetch-facts db query tx-id frame))
+      (is (= (store/fetch-facts db query tx-id frame)
              expected)))))

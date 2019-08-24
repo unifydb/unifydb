@@ -1,6 +1,5 @@
 (ns unifydb.query
   (:require [clojure.core.match :refer [match]]
-            [manifold.stream :as s]
             [unifydb.storage :as store]
             [unifydb.streaming :as streaming]
             [unifydb.unify :as unify]
@@ -9,7 +8,7 @@
 (declare qeval)
 
 (defn empty-stream []
-  (s/->source []))
+  [])
 
 (defn conjoin [db conjuncts frames]
   "Evaluates the conjunction (logical AND) of all `conjuncts` in the context of `frames`.
@@ -25,9 +24,8 @@
    Returns a stream of frames."
   (if (empty? disjuncts)
     (empty-stream)
-    ;; TODO this call to concat is hanging forever - is the stream never getting realized?
-    (s/concat [(qeval db (first disjuncts) frames)
-               (disjoin db (rest disjuncts) frames)])))
+    (concat (qeval db (first disjuncts) frames)
+            (disjoin db (rest disjuncts) frames))))
 
 ;; This is a shitty implementation of negation because it acts only as a filter,
 ;; meaning it is only valid as one of the subsequent clauses in an :and query.
@@ -40,9 +38,9 @@
 (defn negate [db operands frames]
   "Evaluates the `operands` in the context of `frames`, returning a stream of only 
    those frames for which evaluation fails (i.e. for which the logic query cannot be made true)."
-  (s/mapcat
+  (mapcat
    (fn [frame]
-     (if (empty? (s/stream->seq (qeval db (first operands) (s/->source [frame]))))
+     (if (empty? (qeval db (first operands) [frame]))
        [frame]
        []))
    frames))
@@ -58,15 +56,15 @@
      (let [match-result (unify/unify-match query fact frame)]
        (if (= match-result :failed)
          (empty-stream)
-         (s/->source [match-result]))))
-   (s/map
+         [match-result])))
+   (map
     #(vector (nth %1 0) (nth %1 1) (nth %1 2))
     (store/fetch-facts (:storage-backend db) query (:tx-id db) frame))))
 
 (defn simple-query [db query frames]
   "Evaluates a non-compound query, returning a stream of frames."
   ;; TODO apply rules here as well as matching facts
-  (util/stream-mapcat
+  (mapcat
    (fn [frame] (match-facts db query frame))
    frames))
 
@@ -83,4 +81,4 @@
 
 (defn query [db q]
   "Runs the query `q` against `db`, returning a stream of frames with variables bindings."
-  (qeval db q (s/->source [{}])))
+  (qeval db q [{}]))
