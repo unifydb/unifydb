@@ -70,6 +70,7 @@
              {:query '[2 :address [? v]]
               :tx-id 3
               :frame {}
-              :expected [[2 :address [:cambridge [:mass :ave] 78] 3 false]]}]]
+              :expected [[2 :address [:cambridge [:mass :ave] 78] 2 true]
+                         [2 :address [:cambridge [:mass :ave] 78] 3 false]]}]]
       (is (= (store/fetch-facts db query tx-id frame)
              expected)))))

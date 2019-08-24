@@ -45,6 +45,54 @@
        []))
    frames))
 
+(defn fact-entity [fact]
+  (nth fact 0))
+
+(defn fact-attribute [fact]
+  (nth fact 1))
+
+(defn fact-value [fact]
+  (nth fact 2))
+
+(defn fact-tx-id [fact]
+  (nth fact 3))
+
+(defn fact-added? [fact]
+  (nth fact 4))
+
+(defn cmp-fact-versions [f1 f2]
+  "Like compare, but gives false a higher priority than true"
+  (match [f1 f2]
+         [false true] 1
+         [true false] -1
+         [(true :<< coll?) (true :<< coll?)]
+         (if (= (count f1) (count f2))
+           (if (empty? f1)
+             0
+             (let [cmp (cmp-fact-versions (first f1)
+                                     (first f2))]
+               (if (= cmp 0)
+                 (cmp-fact-versions (rest f1) (rest f2))
+                 cmp)))
+           (- (count f1) (count f2)))
+         :else (if (= (type f1) (type f2))
+                 (compare f1 f2)
+                 (- (hash f1) (hash f2)))))
+
+(defn process-facts [facts]
+  "Filters out any facts that have been retracted and
+   returns facts in the format [entity attribute value]
+   suitable for being passed to unify-match."
+  (let [grouped (group-by
+                 (juxt fact-entity fact-attribute fact-value)
+                 facts)]
+    (filter
+     (fn [fact]
+       (let [fact-versions (get grouped fact)]
+         (fact-added? (first (reverse (sort cmp-fact-versions fact-versions))))))
+     (keys grouped))))
+  
+
 (defn match-facts [db query frame]
   "Returns a stream of frames obtained by pattern-matching the `query`
    against the facts in `db` in the context of `frame`.
@@ -57,8 +105,7 @@
        (if (= match-result :failed)
          (empty-stream)
          [match-result])))
-   (map
-    #(vector (nth %1 0) (nth %1 1) (nth %1 2))
+   (process-facts
     (store/fetch-facts (:storage-backend db) query (:tx-id db) frame))))
 
 (defn simple-query [db query frames]
