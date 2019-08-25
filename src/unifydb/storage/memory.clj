@@ -38,11 +38,14 @@
           (map (fn [[attr idx]] [attr (nth vfact idx)])
                attr-to-idxs))))
 
-(defn has-var? [exp]
+(defn var-or-blank? [exp]
+  (or (var? exp) (= exp '_)))
+
+(defn has-var-or-blank? [exp]
   "Returns true if the expression variables"
   (letfn [(tree-walk [node]
             (cond
-              (var? node) true
+              (var-or-blank? node) true
               (util/not-nil-seq? node) (or (tree-walk (first node))
                                            (tree-walk (rest node)))
               :else false))]
@@ -50,7 +53,7 @@
 
 (defn fact->vec [mfact]
   (map
-   #(when-not (has-var? %1) %1)
+   #(when-not (has-var-or-blank? %1) %1)
    [(fact-entity mfact)
     (fact-attribute mfact)
     (fact-value mfact)
@@ -102,18 +105,18 @@
   (let [[entity attribute value] query]
     (match [entity attribute value]
            ;; e a v
-           [(false :<< has-var?) (false :<< has-var?) (false :<< has-var?)]
+           [(false :<< has-var-or-blank?) (false :<< has-var-or-blank?) (false :<< has-var-or-blank?)]
            (set/slice eavt
                       {:entity entity :attribute attribute :value value :tx-id 0}
                       {:entity entity :attribute attribute :value value :tx-id tx-id})
            ;; e a ?
-           [(false :<< has-var?) (false :<< has-var?) (true :<< has-var?)]
+           [(false :<< has-var-or-blank?) (false :<< has-var-or-blank?) (true :<< has-var-or-blank?)]
            (filter-by-tx (set/slice eavt
                                     {:entity entity :attribute attribute}
                                     {:entity entity :attribute attribute})
                          tx-id)
            ;; e ? ?
-           [(false :<< has-var?) (true :<< has-var?) (true :<< has-var?)]
+           [(false :<< has-var-or-blank?) (true :<< has-var-or-blank?) (true :<< has-var-or-blank?)]
            (filter-by-tx (set/slice eavt
                                     {:entity entity}
                                     {:entity entity})
@@ -126,18 +129,18 @@
   (let [[entity attribute value] query]
     (match [entity attribute value]
            ;; a v e
-           [(false :<< has-var?) (false :<< has-var?) (false :<< has-var?)]
+           [(false :<< has-var-or-blank?) (false :<< has-var-or-blank?) (false :<< has-var-or-blank?)]
            (set/slice avet
                       {:attribute attribute :value value :entity entity :tx-id 0}
                       {:attribute attribute :value value :entity entity :tx-id tx-id})
            ;; a v ?
-           [(true :<< has-var?) (false :<< has-var?) (false :<< has-var?)]
+           [(true :<< has-var-or-blank?) (false :<< has-var-or-blank?) (false :<< has-var-or-blank?)]
            (filter-by-tx (set/slice avet
                                     {:attribute attribute :value value}
                                     {:attribute attribute :value value})
                          tx-id)
            ;; a ? ?
-           [(true :<< has-var?) (false :<< has-var?) (true :<< has-var?)]
+           [(true :<< has-var-or-blank?) (false :<< has-var-or-blank?) (true :<< has-var-or-blank?)]
            (filter-by-tx (set/slice avet
                                     {:attribute attribute}
                                     {:attribute attribute})
@@ -152,7 +155,7 @@
         [entity attribute] query]
     (match [entity attribute]
            ;; (? a v), (? a ?)
-           [(true :<< has-var?) (false :<< has-var?)]
+           [(true :<< has-var-or-blank?) (false :<< has-var-or-blank?)]
            (fetch-facts-avet avet query tx-id)
            ;; (e a v), (e a ?), (e ? v), (e ? ?), (? ? v), (? ? ?)
            [_ _]

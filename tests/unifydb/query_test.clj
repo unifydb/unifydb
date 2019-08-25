@@ -65,6 +65,10 @@
                            road-and-number [[:mass :ave] 78]}]}
              {:query '[2 :address [[? town] & [? road-and-number]]]
               :db db-latest
-              :expected '[]}]]
+              :expected '[]}
+             {:query '[[? e] :job [:computer _]]
+              :db db-latest
+              :expected '[{e 2}
+                          {e 1}]}]]
       (is (= (query/query db query)
              expected)))))

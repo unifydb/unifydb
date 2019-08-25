@@ -54,6 +54,9 @@
     (= frame :failed) :failed
     ;; If the patterns are the same, the frame already has the correct bindings
     (= pattern1 pattern2) frame
+    ;; If either of the patterns are the blank signifier _, return the frame without
+    ;; binding anything
+    (or (= pattern1 '_) (= pattern2 '_)) frame
     ;; If pattern1 is a rest-pattern (e.g. [& ?rest]), unify its rest part
     ;; with pattern2 in the current frame
     (and (sequential? pattern1) (= (first pattern1) '&)) (unify-match (second pattern1) pattern2 frame)
