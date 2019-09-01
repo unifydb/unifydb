@@ -1,5 +1,6 @@
 (ns unifydb.query
   (:require [clojure.core.match :refer [match]]
+            [unifydb.facts :refer [fact-entity fact-attribute fact-value fact-added?]]
             [unifydb.storage :as store]
             [unifydb.streaming :as streaming]
             [unifydb.unify :as unify]
@@ -44,21 +45,6 @@
        [frame]
        []))
    frames))
-
-(defn fact-entity [fact]
-  (nth fact 0))
-
-(defn fact-attribute [fact]
-  (nth fact 1))
-
-(defn fact-value [fact]
-  (nth fact 2))
-
-(defn fact-tx-id [fact]
-  (nth fact 3))
-
-(defn fact-added? [fact]
-  (nth fact 4))
 
 (defn cmp-fact-versions [f1 f2]
   "Like compare, but gives false a higher priority than true"
