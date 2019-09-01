@@ -49,21 +49,21 @@
 (defn cmp-fact-versions [f1 f2]
   "Like compare, but gives false a higher priority than true"
   (match [f1 f2]
-         [false true] 1
-         [true false] -1
-         [(true :<< coll?) (true :<< coll?)]
-         (if (= (count f1) (count f2))
-           (if (empty? f1)
-             0
-             (let [cmp (cmp-fact-versions (first f1)
+    [false true] 1
+    [true false] -1
+    [(true :<< coll?) (true :<< coll?)]
+    (if (= (count f1) (count f2))
+      (if (empty? f1)
+        0
+        (let [cmp (cmp-fact-versions (first f1)
                                      (first f2))]
-               (if (= cmp 0)
-                 (cmp-fact-versions (rest f1) (rest f2))
-                 cmp)))
-           (- (count f1) (count f2)))
-         :else (if (= (type f1) (type f2))
-                 (compare f1 f2)
-                 (- (hash f1) (hash f2)))))
+          (if (= cmp 0)
+            (cmp-fact-versions (rest f1) (rest f2))
+            cmp)))
+      (- (count f1) (count f2)))
+    :else (if (= (type f1) (type f2))
+            (compare f1 f2)
+            (- (hash f1) (hash f2)))))
 
 (defn process-facts [facts]
   "Filters out any facts that have been retracted and
@@ -77,7 +77,6 @@
        (let [fact-versions (get grouped fact)]
          (fact-added? (first (reverse (sort cmp-fact-versions fact-versions))))))
      (keys grouped))))
-  
 
 (defn match-facts [db query frame]
   "Returns a stream of frames obtained by pattern-matching the `query`
@@ -105,12 +104,12 @@
   "Evaluates a logic query given by `query` in the context of `frames`.
    Returns a stream of frames."
   (match query
-         [:and & conjuncts] (conjoin db conjuncts frames)
-         [:or & disjuncts] (disjoin db disjuncts frames)
-         [:not & operands] (negate db operands frames)
-         ;; TODO support lisp-value?
-         [:always-true & _] frames
-         _ (simple-query db query frames)))
+    [:and & conjuncts] (conjoin db conjuncts frames)
+    [:or & disjuncts] (disjoin db disjuncts frames)
+    [:not & operands] (negate db operands frames)
+    ;; TODO support lisp-value?
+    [:always-true & _] frames
+    _ (simple-query db query frames)))
 
 (defn query [db q]
   "Runs the query `q` against `db`, returning a stream of frames with variables bindings."
