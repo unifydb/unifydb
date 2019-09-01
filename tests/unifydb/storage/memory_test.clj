@@ -11,15 +11,15 @@
                 [1 :in-machine 2 2 true]]
         db (-> (mem/new) (store/transact-facts! facts))]
     (is (= (vec @(:eavt db))
-           [(mem/vec->fact [1 :color "red" 0 true])
-            (mem/vec->fact [1 :in-machine 2 2 true])
-            (mem/vec->fact [1 :name "Widget A" 0 true])
-            (mem/vec->fact [2 :name "Machine Z" 1 true])]))
+           [[1 :color "red" 0 true]
+            [1 :in-machine 2 2 true]
+            [1 :name "Widget A" 0 true]
+            [2 :name "Machine Z" 1 true]]))
     (is (= (vec @(:avet db))
-           [(mem/vec->fact [1 :color "red" 0 true])
-            (mem/vec->fact [1 :in-machine 2 2 true])
-            (mem/vec->fact [2 :name "Machine Z" 1 true])
-            (mem/vec->fact [1 :name "Widget A" 0 true])]))))    
+           [[:color "red" 1 0 true]
+            [:in-machine 2 1 2 true]
+            [:name "Machine Z" 2 1 true]
+            [:name "Widget A" 1 0 true]]))))    
 
 
 (deftest test-fetch-facts
