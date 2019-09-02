@@ -9,18 +9,18 @@
 
 (defn make-new-tx-facts []
   "Returns the list of database operations to make a new transaction entity."
-  [[:db/add "db.tx" :db/txInstant (System/currentTimeMillis)]])
+  [[:unifydb/add "unifydb.tx" :unifydb/txInstant (System/currentTimeMillis)]])
 
 (defn process-tx-data [tx-data]
   "Turns a list of transaction statements in the form
    [<db operation> <entity> <attribute> <value>] into
    a list of facts ready to be transacted of the form
-   [<entity> <attribute> <value> \"db.tx\" <added?>]"
+   [<entity> <attribute> <value> \"unifydb.tx\" <added?>]"
   (map
    (fn [tx-stmt]
      (match tx-stmt
-            [:db/add e a v] [e a v "db.tx" true]
-            [:db/retract e a v] [e a v "db.tx" false]))
+            [:unifydb/add e a v] [e a v "unifydb.tx" true]
+            [:unifydb/retract e a v] [e a v "unifydb.tx" false]))
    tx-data))
 
 (defn resolve-temp-ids [storage-backend facts]
