@@ -23,47 +23,51 @@
             [:unifydb/retract e a v] [e a v "unifydb.tx" false]))
    tx-data))
 
-(defn resolve-temp-ids [storage-backend facts]
-  "Resolves temporary ids in facts to actual database ids."
-  (let [ids (reduce
-             ;; First generate a unique id for each temporary id in the facts
-             (fn [ids fact]
-               (let [eid (fact-entity fact)]
-                 (if (string? eid)
-                   (let [resolved-id (get ids eid)]
-                     (if-not resolved-id
-                       (assoc ids eid (storage/get-next-id storage-backend))
-                       ids))
-                   ids)))
-             {}
-             facts)]
-    ;; Then replace all string references to ids in the entity, value or tx-id fields
-    ;; with the resolved ids
-    (map
-     (fn [fact]
-       (let [e (or (get ids (fact-entity fact)) (fact-entity fact))
-             v (or (get ids (fact-value fact)) (fact-value fact))
-             tx-id (get ids (fact-tx-id fact))]
-         [e (fact-attribute fact) v tx-id (fact-added? fact)]))
-     facts)))
+(defn gen-temp-ids [storage-backend facts]
+  "Returns a map of temporray ids to actual database ids based on the facts"
+  (reduce
+   (fn [ids fact]
+     (let [eid (fact-entity fact)]
+       (if (string? eid)
+         (let [resolved-id (get ids eid)]
+           (if-not resolved-id
+             (assoc ids eid (storage/get-next-id storage-backend))
+             ids))
+         ids)))
+   {}
+   facts))
 
+(defn resolve-temp-ids [ids facts]
+  "Resolves temporary ids in facts to the actual database ids."
+  (map
+   (fn [fact]
+     (let [e (or (get ids (fact-entity fact)) (fact-entity fact))
+           v (or (get ids (fact-value fact)) (fact-value fact))
+           tx-id (get ids (fact-tx-id fact))]
+       [e (fact-attribute fact) v tx-id (fact-added? fact)]))
+   facts))
 
-(defn do-transaction [tx-agent-state conn tx-data]
+(defn do-transaction [_ conn tx-data callback]
   "Does all necessary processing of `tx-data` and sends it off to the storage backend."
-  (let [facts (->> tx-data
-                   (into (make-new-tx-facts))
-                   (process-tx-data)
-                   (resolve-temp-ids (:storage-backend conn)))
-        tx-id (fact-tx-id (first facts))
+  (let [with-tx (into tx-data (make-new-tx-facts))
+        raw-facts (process-tx-data with-tx)
+        ids (gen-temp-ids (:storage-backend conn) raw-facts)
+        facts (resolve-temp-ids ids raw-facts)
+        tx-id (get ids "unifydb.tx")
         tx-report {:db-after (assoc conn :tx-id tx-id)
-                   :tx-data facts}]
+                   :tx-data facts
+                   :tempids ids}]
     (storage/transact-facts! (:storage-backend conn) facts)
-    tx-report))
+    (callback tx-report)
+    nil))
 
 (def tx-agent
   "The agent responsible for processing transactions serially."
-  (agent {}))
+  (agent nil))
 
 (defn transact [conn tx-data]
   "Transacts `tx-data` into the database represented by `conn`."
-  (send-off tx-agent do-transaction conn tx-data))
+  (let [result (atom nil)
+        callback (fn [tx-report] (reset! result tx-report))]
+    (send-off tx-agent do-transaction conn tx-data callback)
+    (future (loop [res @result] (if res res (recur @result))))))
