@@ -112,5 +112,6 @@
     _ (simple-query db query frames)))
 
 (defn query [db q]
-  "Runs the query `q` against `db`, returning a stream of frames with variables bindings."
+  "Runs the query `q` against `db`, returning a stream of
+   frames with variables bindings."
   (qeval db q [{}]))
