@@ -72,23 +72,15 @@
   (let [result (atom nil)
         callback (fn [tx-report] (reset! result tx-report))]
     (send-off tx-agent do-transaction conn tx-data callback)
-    (loop [res @result] (if res res (recur @result)))))
-
-(defrecord TransactService [queue-backend state]
-  service/IService
-  (start! [self]
-    (swap! (:state self) #(assoc %1 :started true))
-    (loop []
-      (when (:started @(:state self))
-        (let [message (queue/consume (:queue-backend self) :transact)
-              tx-report (transact (:conn message) (:tx-data message))]
-          (queue/publish (:queue-backend self)
-                         :transact-results
-                         {:id (:id message)
-                          :tx-report tx-report}))
-        (recur))))
-  (stop! [self]
-    (swap! (:state self) #(assoc %1 :started false))))
+    (future (loop [res @result] (if res res (recur @result))))))
 
 (defn new [queue-backend]
-  (->TransactService queue-backend {:started false}))
+  (service/make-service
+   queue-backend
+   {:transact
+    (fn [message]
+      (let [tx-report @(transact (:conn message) (:tx-data message))]
+        (queue/publish queue-backend
+                       :transact-results
+                       {:id (:id message)
+                        :tx-report tx-report})))}))

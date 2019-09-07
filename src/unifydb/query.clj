@@ -119,21 +119,9 @@
    frames with variables bindings."
   (qeval db q [{}]))
 
-(defrecord QueryService [queue-backend state]
-  service/IService
-  (start! [self]
-    (swap! (:state self) #(assoc %1 :started true))
-    (loop []
-      (when (:started @(:state self))
-        (let [message @(queue/consume (:queue-backend self) :query)
-              result (query (:db message) (:query message))]
-          (queue/publish (:queue-backend self)
-                         :query-results
-                         {:id (:id message)
-                          :result result}))
-        (recur))))
-  (stop! [self]
-    (swap! (:state self) #(assoc %1 :started false))))
-
 (defn new [queue-backend]
-  (->QueryService queue-backend {:started false}))
+  (service/make-service
+   queue-backend
+   {:query (fn [message] (query (:db message) (:query message)))
+    :query/match (fn [])
+    :query/match-result (fn [])}))
