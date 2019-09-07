@@ -1,6 +1,8 @@
 (ns unifydb.query
   (:require [clojure.core.match :refer [match]]
             [unifydb.facts :refer [fact-entity fact-attribute fact-value fact-added?]]
+            [unifydb.messagequeue :as queue]
+            [unifydb.service :as service]
             [unifydb.storage :as store]
             [unifydb.streaming :as streaming]
             [unifydb.unify :as unify]
@@ -83,6 +85,7 @@
    against the facts in `db` in the context of `frame`.
 
    The pattern-matching is done in parallel via the streaming backend."
+  ;; TODO swap this streaming-backend-base system out for a queue-backend-based system
   (streaming/mapcat
    (:streaming-backend db)
    (fn [fact]
@@ -115,3 +118,22 @@
   "Runs the query `q` against `db`, returning a stream of
    frames with variables bindings."
   (qeval db q [{}]))
+
+(defrecord QueryService [queue-backend state]
+  service/IService
+  (start! [self]
+    (swap! (:state self) #(assoc %1 :started true))
+    (loop []
+      (when (:started @(:state self))
+        (let [message @(queue/consume (:queue-backend self) :query)
+              result (query (:db message) (:query message))]
+          (queue/publish (:queue-backend self)
+                         :query-results
+                         {:id (:id message)
+                          :result result}))
+        (recur))))
+  (stop! [self]
+    (swap! (:state self) #(assoc %1 :started false))))
+
+(defn new [queue-backend]
+  (->QueryService queue-backend {:started false}))

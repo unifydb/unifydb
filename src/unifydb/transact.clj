@@ -5,6 +5,8 @@
                                    fact-value
                                    fact-tx-id
                                    fact-added?]]
+            [unifydb.messagequeue :as queue]
+            [unifydb.service :as service]
             [unifydb.storage :as storage]))
 
 (defn make-new-tx-facts []
@@ -70,4 +72,23 @@
   (let [result (atom nil)
         callback (fn [tx-report] (reset! result tx-report))]
     (send-off tx-agent do-transaction conn tx-data callback)
-    (future (loop [res @result] (if res res (recur @result))))))
+    (loop [res @result] (if res res (recur @result)))))
+
+(defrecord TransactService [queue-backend state]
+  service/IService
+  (start! [self]
+    (swap! (:state self) #(assoc %1 :started true))
+    (loop []
+      (when (:started @(:state self))
+        (let [message (queue/consume (:queue-backend self) :transact)
+              tx-report (transact (:conn message) (:tx-data message))]
+          (queue/publish (:queue-backend self)
+                         :transact-results
+                         {:id (:id message)
+                          :tx-report tx-report}))
+        (recur))))
+  (stop! [self]
+    (swap! (:state self) #(assoc %1 :started false))))
+
+(defn new [queue-backend]
+  (->TransactService queue-backend {:started false}))
