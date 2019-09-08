@@ -80,21 +80,27 @@
          (fact-added? (first (reverse (sort cmp-fact-versions fact-versions))))))
      (keys grouped))))
 
+(defn match-fact [[query frame fact]]
+  (let [match-result (unify/unify-match query fact frame)]
+    (if (= match-result :failed)
+      nil
+      match-result)))
+
 (defn match-facts [db query frame]
   "Returns a stream of frames obtained by pattern-matching the `query`
    against the facts in `db` in the context of `frame`.
 
    The pattern-matching is done in parallel via the streaming backend."
-  ;; TODO swap this streaming-backend-base system out for a queue-backend-based system
-  (streaming/mapcat
-   (:streaming-backend db)
-   (fn [fact]
-     (let [match-result (unify/unify-match query fact frame)]
-       (if (= match-result :failed)
-         (empty-stream)
-         [match-result])))
-   (process-facts
-    (store/fetch-facts (:storage-backend db) query (:tx-id db) frame))))
+  (filter #(not (nil? %1))
+   (concat
+    @(queue/qmap
+      (:queue-backend db)
+      :query/match
+      :query/match-results
+      #'match-fact
+      (map #(vector query frame %1)
+           (process-facts
+            (store/fetch-facts (:storage-backend db) query (:tx-id db) frame)))))))
 
 (defn simple-query [db query frames]
   "Evaluates a non-compound query, returning a stream of frames."
@@ -123,5 +129,4 @@
   (service/make-service
    queue-backend
    {:query (fn [message] (query (:db message) (:query message)))
-    :query/match (fn [])
-    :query/match-result (fn [])}))
+    :query/match (queue/qmap-process-fn queue-backend :query/match-results)}))

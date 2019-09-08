@@ -1,5 +1,7 @@
 (ns unifydb.query-test
   (:require [clojure.test :refer [deftest is]]
+            [unifydb.messagequeue :as queue]
+            [unifydb.messagequeue.memory :as memqueue]
             [unifydb.query :as query]
             [unifydb.storage :as store]
             [unifydb.storage.memory :as memstore]
@@ -17,15 +19,15 @@
                [2 :address [:cambridge [:mass :ave] 78] 2 true]
                [2 :address [:cambridge [:mass :ave] 78] 3 false]]
         storage-backend (-> (memstore/new) (store/transact-facts! facts))
-        streaming-backend (pool/new)
+        queue-backend (memqueue/new)
         db-latest {:storage-backend storage-backend
-                   :streaming-backend streaming-backend
+                   :queue-backend queue-backend
                    :tx-id 3}
         db-tx-2 {:storage-backend storage-backend
-                 :streaming-backend streaming-backend
+                 :queue-backend queue-backend
                  :tx-id 2}
         db-tx-1 {:storage-backend storage-backend
-                 :streaming-backend streaming-backend
+                 :queue-backend queue-backend
                  :tx-id 1}]
     (doseq [{:keys [query db expected]}
             [{:query '[[? e] :name "Ben Bitdiddle"]
