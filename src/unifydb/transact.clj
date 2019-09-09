@@ -7,7 +7,8 @@
                                    fact-added?]]
             [unifydb.messagequeue :as queue]
             [unifydb.service :as service]
-            [unifydb.storage :as storage]))
+            [unifydb.storage :as storage]
+            [unifydb.util :as util]))
 
 (defn make-new-tx-facts []
   "Returns the list of database operations to make a new transaction entity."
@@ -69,10 +70,10 @@
 
 (defn transact [conn tx-data]
   "Transacts `tx-data` into the database represented by `conn`."
-  (let [result (atom nil)
-        callback (fn [tx-report] (reset! result tx-report))]
+  (let [result (promise)
+        callback (fn [tx-report] (deliver result tx-report))]
     (send-off tx-agent do-transaction conn tx-data callback)
-    (future (loop [res @result] (if res res (recur @result))))))
+    result))
 
 (defn new [queue-backend]
   (service/make-service
