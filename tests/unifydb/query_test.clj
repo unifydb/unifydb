@@ -3,6 +3,7 @@
             [unifydb.messagequeue :as queue]
             [unifydb.messagequeue.memory :as memqueue]
             [unifydb.query :as query]
+            [unifydb.service :as service]
             [unifydb.storage :as store]
             [unifydb.storage.memory :as memstore]
             [unifydb.streaming.threadpool :as pool]))
@@ -20,6 +21,7 @@
                [2 :address [:cambridge [:mass :ave] 78] 3 false]]
         storage-backend (-> (memstore/new) (store/transact-facts! facts))
         queue-backend (memqueue/new)
+        queue-service (query/new queue-backend)
         db-latest {:storage-backend storage-backend
                    :queue-backend queue-backend
                    :tx-id 3}
@@ -29,6 +31,7 @@
         db-tx-1 {:storage-backend storage-backend
                  :queue-backend queue-backend
                  :tx-id 1}]
+    (service/start! queue-service)
     (doseq [{:keys [query db expected]}
             [{:query '[[? e] :name "Ben Bitdiddle"]
               :db db-latest
@@ -73,4 +76,5 @@
               :expected '[{e 2}
                           {e 1}]}]]
       (is (= (query/query db query)
-             expected)))))
+             expected)))
+    (service/stop! queue-service)))
