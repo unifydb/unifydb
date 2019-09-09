@@ -1,32 +1,38 @@
 (ns unifydb.messagequeue.memory
-  (:require [unifydb.messagequeue :as q])
-  (:import [clojure.lang PersistentQueue]))
+  (:require [unifydb.messagequeue :as q]))
 
-(defn ensure-queue! [queues queue]
-  (when-not (get @queues queue)
-    (swap! queues #(assoc %1 queue (PersistentQueue/EMPTY)))))
+(defn do-publish [state queue-name message]
+  (let [callbacks (get (:queues state) queue-name)]
+    (pmap #((:callback %1) message) callbacks))
+  state)
 
-(defn enqueue [queues queue-name message]
-  (ensure-queue! queues queue-name)
-  (swap! queues #(assoc %1 queue-name (conj (get %1 queue-name) message))))
+(defn do-subscribe [state queue-name callback sub-promise]
+  (let [next-id (:next-id state)
+        queues (:queues state)
+        queue (get queues queue-name)]
+    (deliver sub-promise next-id)
+    {:next-id (inc next-id)
+     :queues (assoc queues queue-name (conj queue {:id next-id
+                                                   :callback callback}))}))
 
-(defn dequeue [queues queue-name]
-  (ensure-queue! queues queue-name)
-  (let [queue (get @queues queue-name)]
-    (future
-     (loop [message (peek queue)]
-       (if (nil? message)
-         (recur (peek queue))
-         (do
-           (swap! queues #(assoc %1 queue-name (pop (get %1 queue-name))))
-           message))))))
+(defn do-unsubscribe [state subscription]
+  (let [queues (:queues state)
+        {:keys [queue id]} subscription]
+    (assoc state :queues
+           (assoc queues queue (filter #(not= (:id %1) id) (get queues queue))))))
 
-(defrecord InMemoryMessageQueueBackend [queues]
+(defrecord InMemoryMessageQueueBackend [agent]
   q/IMessageQueueBackend
   (publish [self queue message]
-    (enqueue (:queues self) queue message))
-  (consume [self queue]
-    (dequeue (:queues self) queue)))
+    (send (:agent self) do-publish queue message))
+  (subscribe [self queue callback]
+    (let [sub-promise (promise)]
+      (send (:agent self) do-subscribe queue callback sub-promise)
+      {:id @sub-promise
+       :queue queue}))
+  (unsubscribe [self subscription]
+    (send (:agent self) do-unsubscribe subscription)))
 
 (defn new []
-  (->InMemoryMessageQueueBackend (atom {})))
+  (->InMemoryMessageQueueBackend (agent {:queues {}
+                                         :next-id 0})))

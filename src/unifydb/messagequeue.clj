@@ -5,45 +5,60 @@
   ;;  e.g. all message on the :transact queue are in one backend and
   ;;  all message to the :query queue are in a different backend
   (publish [self queue message] "Publishes `message` onto the queue named `queue`.")
-  (consume [self queue] "Returns a future of the next message in `queue`."))
+  (subscribe [self queue callback]
+    "Registers a subscription that calls `callback` on every new message from `queue`.
+     Returns a subscription object that can be passed to `unsubscribe`.")
+  (unsubscribe [self subscription] "De-registers and cleans up the `subscription`."))
 
 (defn qmap [queue-backend item-queue result-queue f coll]
   "Parallel map that distributes tasks across the `queue-backend`
    on the queue denoted by `queue-name`.
 
    `f` should be a symbol that resolves to a function, not a lambda.
-   Returns a future. Requires at least one consumer that listens to
-   `result-queue` and calls a `qmap-process-fn` on each item."
+   Returns immediately, but the return value can be dereferenced to get
+   the full result set once the calculation is complete. Requires at least
+   one subscriber registered with a callback generated via `qmap-process-fn`."
   (let [state (atom {:id 0
+                     :items coll
                      :results {}})
+        result-promise (promise)
         next-id (fn []
                   (let [prev-id (:id @state)]
                     (swap! state #(assoc %1 :id (inc prev-id)))
                     prev-id))
         process-results (fn []
+                          (unsubscribe queue-backend (:subscription @state))
                           (let [results (:results @state)
                                 ids (sort (keys results))]
-                            (map #(get results %1) ids)))]
+                            (map #(get results %1) ids)))
+        result-callback (fn [message]
+                          (if (= (count (:results @state)) (count (:items @state)))
+                            (deliver result-promise (process-results))
+                            (let [result (:result @message)
+                                  results (:results @state)]
+                              (print (format "received result %s\n" result))
+                              (swap! state
+                                     #(assoc %1
+                                             :results
+                                             (assoc results
+                                                    (:id @message)
+                                                    result))))))
+        result-subscription (subscribe queue-backend result-queue result-callback)
+        state (swap! state #(assoc %1 :subscription result-subscription))]
     (doseq [item coll]
+      (print (format "publishing %s\n" item))
       (publish queue-backend
                item-queue
                {:id (next-id)
                 :fn f
                 :item item}))
-    (future
-      (loop [message (consume queue-backend result-queue)]
-        (if (= (count (:results @state)) (count coll))
-          (process-results)
-          (do
-            (let [result (:result @message)
-                  results (:results @state)]
-              (swap! state #(assoc %1 :results (assoc results (:id @message) result)))
-              (recur (consume queue-backend result-queue)))))))))
+    result-promise))
 
 (defn qmap-process-fn [queue-backend result-queue]
   "Returns a function that processes a qmap item
    and publishes the results to `result-queue`"
   (fn [message]
     (let [result (apply (:fn message) [(:item message)])]
+      (print (format "obtained result %s\n" result))
       (publish queue-backend result-queue {:id (:id message)
                                            :result result}))))
