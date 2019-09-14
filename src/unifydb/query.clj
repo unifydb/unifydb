@@ -92,15 +92,14 @@
 
    The pattern-matching is done in parallel via the streaming backend."
   (filter #(not (nil? %1))
-   (concat
-    @(queue/qmap
-      (:queue-backend db)
-      :query/match
-      :query/match-results
-      #'match-fact
-      (map #(vector query frame %1)
-           (process-facts
-            (store/fetch-facts (:storage-backend db) query (:tx-id db) frame)))))))
+          @(queue/qmap
+            (:queue-backend db)
+            :query/match
+            :query/match-results
+            #'match-fact
+            (map #(vector query frame %1)
+                 (process-facts
+                  (store/fetch-facts (:storage-backend db) query (:tx-id db) frame))))))
 
 (defn simple-query [db query frames]
   "Evaluates a non-compound query, returning a stream of frames."
