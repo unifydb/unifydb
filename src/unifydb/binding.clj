@@ -11,7 +11,7 @@
 
 (defn frame-binding [frame var]
   "Returns the binding for `var` in `frame` or nil."
-  (get frame var))
+  (get frame (var-name var)))
 
 (defn extend-frame [frame var val]
   "Binds `var` to `val` in `frame`."
@@ -23,9 +23,9 @@
    in the query with no binding in the frame."
   (letfn [(copy [exp]
             (cond
-              (var? exp) (let [binding-value (get frame (var-name exp))]
+              (var? exp) (let [binding-value (frame-binding frame exp)]
                            (if binding-value
-                             binding-value
+                             (copy binding-value)
                              (unbound-var-handler exp frame)))
               (util/not-nil-seq? exp) (cons (copy (first exp)) (copy (rest exp)))
               :else exp))]

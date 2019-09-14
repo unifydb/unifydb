@@ -1,5 +1,5 @@
 (ns unifydb.query-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [clojure.test :refer [deftest is testing]]
             [unifydb.messagequeue :as queue]
             [unifydb.messagequeue.memory :as memqueue]
             [unifydb.query :as query]
@@ -8,73 +8,132 @@
             [unifydb.storage.memory :as memstore]
             [unifydb.streaming.threadpool :as pool]))
 
-(deftest query-facts
-  (let [facts [[1 :name "Ben Bitdiddle" 0 true]
-               [1 :job [:computer :wizard] 0 true]
-               [1 :salary 60000 1 true]
-               [2 :name "Alyssa P. Hacker" 1 true]
-               [2 :job [:computer :programmer] 2 true]
-               [2 :salary 40000 2 true]
-               [2 :supervisor 1 2 true]
-               [1 :address [:slumerville [:ridge :road] 10] 2 true]
-               [2 :address [:cambridge [:mass :ave] 78] 2 true]
-               [2 :address [:cambridge [:mass :ave] 78] 3 false]]
-        storage-backend (-> (memstore/new) (store/transact-facts! facts))
-        queue-backend (memqueue/new)
-        queue-service (query/new queue-backend)
-        db-latest {:storage-backend storage-backend
+(defmacro defquerytest [name [storage-backend queue-backend] facts & body]
+  `(deftest ~name
+     (let [facts# ~facts
+           ~storage-backend (-> (memstore/new) (store/transact-facts! facts#))
+           ~queue-backend (memqueue/new)
+           query-service# (query/new ~queue-backend)]
+       (try
+         (service/start! query-service#)
+         ~@body
+         (finally
+           (service/stop! query-service#))))))
+
+(defquerytest simple-matching [storage-backend queue-backend]
+  [[1 :name "Ben Bitdiddle" 0 true]
+   [1 :job [:computer :wizard] 0 true]
+   [1 :salary 60000 1 true]
+   [2 :name "Alyssa P. Hacker" 1 true]
+   [2 :job [:computer :programmer] 2 true]
+   [2 :salary 40000 2 true]
+   [2 :supervisor 1 2 true]
+   [1 :address [:slumerville [:ridge :road] 10] 2 true]
+   [2 :address [:cambridge [:mass :ave] 78] 2 true]
+   [2 :address [:cambridge [:mass :ave] 78] 3 false]
+   [3 :address [:slumerville [:davis :square] 42] 4 true]]
+  (let [db-latest {:storage-backend storage-backend
                    :queue-backend queue-backend
-                   :tx-id 3}
-        db-tx-2 {:storage-backend storage-backend
-                 :queue-backend queue-backend
-                 :tx-id 2}
-        db-tx-1 {:storage-backend storage-backend
-                 :queue-backend queue-backend
-                 :tx-id 1}]
-    (service/start! queue-service)
-    (doseq [{:keys [query db expected]}
-            [{:query '[[? e] :name "Ben Bitdiddle"]
+                   :tx-id 4}
+        db-tx-2 (assoc db-latest :tx-id 2)]
+    (doseq [{:keys [query db expected name]}
+            [{:query '{:find [?e]
+                       :where [[?e :name "Ben Bitdiddle"]]}
               :db db-latest
-              :expected '[{e 1}]}
-             {:query '[[? e] :job [:computer [? what]]]
+              :expected '[[1]]}
+             {:query '{:find [?e ?what]
+                       :where [[?e :job [:computer ?what]]]}
               :db db-latest
-              :expected '[{e 2
-                           what :programmer}
-                          {e 1
-                           what :wizard}]}
-             {:query '[:and
-                       [[? e] :job [:computer [? what]]]
-                       [[? e] :salary 60000]]
+              :expected '[[2 :programmer]
+                          [1 :wizard]]}
+             {:query '{:find [?town ?road-and-number]
+                       :where [[1 :address [?town & ?road-and-number]]]}
               :db db-latest
-              :expected '[{e 1
-                           what :wizard}]}
-             {:query '[:or
-                       [[? e] :job [:computer :wizard]]
-                       [[? e] :job [:computer :programmer]]]
-              :db db-latest
-              :expected '[{e 1}
-                          {e 2}]}
-             {:query '[:and
-                       [[? e] :job [:computer [? what]]]
-                       [:not [[? e] :salary 60000]]]
-              :db db-latest
-              :expected '[{e 2
-                           what :programmer}]}
-             {:query '[1 :address [[? town] & [? road-and-number]]]
-              :db db-latest
-              :expected '[{town :slumerville
-                           road-and-number [[:ridge :road] 10]}]}
-             {:query '[2 :address [[? town] & [? road-and-number]]]
+              :expected '[[:slumerville [[:ridge :road] 10]]]}
+             {:query '{:find [?town ?road-and-number]
+                       :where [[2 :address [?town & ?road-and-number]]]}
               :db db-tx-2
-              :expected '[{town :cambridge
-                           road-and-number [[:mass :ave] 78]}]}
-             {:query '[2 :address [[? town] & [? road-and-number]]]
+              :expected '[[:cambridge [[:mass :ave] 78]]]}
+             {:query '{:find [?town ?road-and-number]
+                       :where [[2 :address [?town & ?road-and-number]]]}
               :db db-latest
               :expected '[]}
-             {:query '[[? e] :job [:computer _]]
+             {:query '{:find [?e]
+                       :where [[?e :job [:computer _]]]}
               :db db-latest
-              :expected '[{e 2}
-                          {e 1}]}]]
-      (is (= (query/query db query)
-             expected)))
-    (service/stop! queue-service)))
+              :expected '[[2] [1]]}]]
+      (testing (str query)
+        (is (= (query/query db query)
+               expected))))))
+
+(defquerytest compound-queries [storage-backend queue-backend]
+  [[1 :name "Ben Bitdiddle" 0 true]
+   [1 :job [:computer :wizard] 0 true]
+   [1 :salary 60000 1 true]
+   [2 :name "Alyssa P. Hacker" 1 true]
+   [2 :job [:computer :programmer] 2 true]
+   [2 :salary 40000 2 true]
+   [2 :supervisor 1 2 true]
+   [1 :address [:slumerville [:ridge :road] 10] 2 true]
+   [2 :address [:cambridge [:mass :ave] 78] 2 true]
+   [2 :address [:cambridge [:mass :ave] 78] 3 false]
+   [3 :address [:slumerville [:davis :square] 42] 4 true]]
+  (let [db {:storage-backend storage-backend
+            :queue-backend queue-backend
+            :tx-id 4}]
+    (doseq [{:keys [query db expected name]}
+            [{:query '{:find [?e ?what]
+                       :where [[:and
+                                [?e :job [:computer ?what]]
+                                [?e :salary 60000]]]}
+              :db db
+              :expected '[[1 :wizard]]}
+             {:query '{:find [?e ?what]
+                       :where [[?e :job [:computer ?what]]
+                               [?e :salary 60000]]}
+              :db db
+              :expected '[[1 :wizard]]}
+             {:query '{:find [?e]
+                       :where [[:or
+                                [?e :job [:computer :wizard]]
+                                [?e :job [:computer :programmer]]]]}
+              :db db
+              :expected '[[1] [2]]}
+             {:query '{:find [?e ?what]
+                       :where [[:and
+                                [?e :job [:computer ?what]]
+                                [:not [?e :salary 60000]]]]}
+              :db db
+              :expected '[[2 :programmer]]}]]
+      (testing (str query)
+        (is (= (query/query db query)
+               expected))))))
+
+(defquerytest rules [storage-backend queue-backend]
+  [[1 :name "Ben Bitdiddle" 0 true]
+   [1 :job [:computer :wizard] 0 true]
+   [1 :salary 60000 1 true]
+   [2 :name "Alyssa P. Hacker" 1 true]
+   [2 :job [:computer :programmer] 2 true]
+   [2 :salary 40000 2 true]
+   [2 :supervisor 1 2 true]
+   [1 :address [:slumerville [:ridge :road] 10] 2 true]
+   [2 :address [:cambridge [:mass :ave] 78] 2 true]
+   [2 :address [:cambridge [:mass :ave] 78] 3 false]
+   [3 :address [:slumerville [:davis :square] 42] 4 true]]
+  (let [db {:queue-backend queue-backend
+            :storage-backend storage-backend
+            :tx-id 4}]
+    (doseq [{:keys [query db expected name]}
+            [{:query '{:find [?who]
+                       :where [(:lives-near ?who 1)]
+                       :rules [[(:lives-near ?person1 ?person2)
+                                [?person1 :address [?town & _]]
+                                [?person2 :address [?town & _]]
+                                [:not (:same ?person1 ?person2)]]
+                               [(:same ?x ?x)]]}
+              :db db
+              :expected '[[3]]}]]
+      (testing (str query)
+        (is (= (query/query db query)
+               expected))))))
