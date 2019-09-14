@@ -54,20 +54,26 @@
     (= frame :failed) :failed
     ;; If the patterns are the same, the frame already has the correct bindings
     (= pattern1 pattern2) frame
+    ;; Nothing should unify with nil (except nil)
+    (or (nil? pattern1) (nil? pattern2)) :failed
     ;; If either of the patterns are the blank signifier _, return the frame without
     ;; binding anything
     (or (= pattern1 '_) (= pattern2 '_)) frame
     ;; If pattern1 is a rest-pattern (e.g. [& ?rest]), unify its rest part
     ;; with pattern2 in the current frame
     (and (sequential? pattern1) (= (first pattern1) '&)) (unify-match (second pattern1) pattern2 frame)
+    ;; If pattern2 is a rest-pattern, unify its rest part with pattern1
+    ;; in the current frame
+    (and (sequential? pattern2) (= (first pattern2) '&)) (unify-match (second pattern2) pattern1 frame)
     ;; If pattern1 is a variable, try to bind it to pattern2
     (var? pattern1) (extend-if-possible pattern1 pattern2 frame)
     ;; If pattern1 is not a variable but pattern2 is, try to bind pattern2 to pattern1
     (var? pattern2) (extend-if-possible pattern2 pattern1 frame)
     ;; If both patterns are lists, recursively unify them
-    (and (sequential? pattern1) (sequential? pattern2)) (unify-match (rest pattern1)
-                                                                     (rest pattern2)
-                                                                     (unify-match (first pattern1)
-                                                                                  (first pattern2)
-                                                                                  frame))
+    (and (sequential? pattern1) (sequential? pattern2))
+    (unify-match (rest pattern1)
+                 (rest pattern2)
+                 (unify-match (first pattern1)
+                              (first pattern2)
+                              frame))
     :else :failed))
