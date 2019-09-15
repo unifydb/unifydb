@@ -61,10 +61,12 @@
     (or (= pattern1 '_) (= pattern2 '_)) frame
     ;; If pattern1 is a rest-pattern (e.g. [& ?rest]), unify its rest part
     ;; with pattern2 in the current frame
-    (and (sequential? pattern1) (= (first pattern1) '&)) (unify-match (second pattern1) pattern2 frame)
+    (and (sequential? pattern1) (= (first pattern1) '&))
+    (unify-match (second pattern1) pattern2 frame)
     ;; If pattern2 is a rest-pattern, unify its rest part with pattern1
     ;; in the current frame
-    (and (sequential? pattern2) (= (first pattern2) '&)) (unify-match (second pattern2) pattern1 frame)
+    (and (sequential? pattern2) (= (first pattern2) '&))
+    (unify-match (second pattern2) pattern1 frame)
     ;; If pattern1 is a variable, try to bind it to pattern2
     (var? pattern1) (extend-if-possible pattern1 pattern2 frame)
     ;; If pattern1 is not a variable but pattern2 is, try to bind pattern2 to pattern1
