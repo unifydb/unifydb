@@ -227,7 +227,10 @@
             (vec (binding/instantiate frame processed-find (fn [v f] v))))))))
 
 (defn new [queue-backend]
+  "Returns a new query component instance."
   (service/make-service
    queue-backend
-   {:query (fn [message] (query (:db message) (:query message)))
+   {:query (fn [message]
+             (->> (query (:db message) (:query message))
+                  (queue/publish queue-backend :query/results)))
     :query/match (queue/qmap-process-fn queue-backend :query/match-results)}))
