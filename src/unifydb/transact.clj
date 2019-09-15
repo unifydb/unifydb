@@ -50,7 +50,7 @@
        [e (fact-attribute fact) v tx-id (fact-added? fact)]))
    facts))
 
-(defn do-transaction [_ conn tx-data callback]
+(defn do-transaction [_ conn tx-data result-promise]
   "Does all necessary processing of `tx-data` and sends it off to the storage backend."
   (let [with-tx (into tx-data (make-new-tx-facts))
         raw-facts (process-tx-data with-tx)
@@ -61,7 +61,7 @@
                    :tx-data facts
                    :tempids ids}]
     (storage/transact-facts! (:storage-backend conn) facts)
-    (callback tx-report)
+    (deliver result-promise tx-report)
     nil))
 
 (def tx-agent
@@ -70,12 +70,12 @@
 
 (defn transact [conn tx-data]
   "Transacts `tx-data` into the database represented by `conn`."
-  (let [result (promise)
-        callback (fn [tx-report] (deliver result tx-report))]
-    (send-off tx-agent do-transaction conn tx-data callback)
+  (let [result (promise)]
+    (send-off tx-agent do-transaction conn tx-data result)
     result))
 
 (defn new [queue-backend]
+  "Returns a new transact component instance."
   (service/make-service
    queue-backend
    {:transact
