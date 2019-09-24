@@ -41,6 +41,9 @@
 ;; generating a stream of every fact in the database and then passing it through the
 ;; :not filter. This is an acceptable solution for now but it should be clearly documented
 ;; and hopefully one day improved.
+;;
+;; See also: https://en.wikipedia.org/wiki/Negation_as_failure
+;;           https://en.wikipedia.org/wiki/Closed-world_assumption
 (defn negate [db negatee rules frames]
   "Evaluates the `negatee` in the context of `frames`, returning a stream of only 
    those frames for which evaluation fails (i.e. for which the logic query cannot be made true)."
