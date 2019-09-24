@@ -235,5 +235,6 @@
    queue-backend
    {:query (fn [message]
              (->> (query (:db message) (:query message))
+                  (assoc message :results)
                   (queue/publish queue-backend :query/results)))
     :query/match (queue/qmap-process-fn queue-backend :query/match-results)}))
