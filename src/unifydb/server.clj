@@ -50,7 +50,7 @@
     (vector? edn-result) (into [] (map translate-edn-result edn-result))
     :else edn-result))
 
-(defn query [queue-backend]
+(defn query [queue-backend storage-backend]
   (fn [request respond raise]
     (let [raw-query (:query (:body request))
           query-data (if (= (string/lower-case (request/content-type request))
@@ -59,8 +59,8 @@
                        raw-query)
           id (UUID/randomUUID)
           query-msg {:db {:queue-backend queue-backend
-                          :storage-backend nil  ;; TODO
-                          :tx-id (:tx-id request)}
+                          :storage-backend storage-backend
+                          :tx-id (:tx-id (:body request))}
                      :query query-data
                      :id id}]
       (send query-results-agent
@@ -75,9 +75,9 @@
                          (:results message)))))
       (queue/publish queue-backend :query query-msg))))
 
-(defn routes [queue-backend]
+(defn routes [queue-backend storage-backend]
   (compojure/routes
-   (POST "/query" request (query queue-backend))
+   (POST "/query" request (query queue-backend storage-backend))
    (route/not-found
     {:body {:message "These aren't the droids you're looking for."}})))
 
@@ -115,8 +115,8 @@
                                                    (:type wrapper)))))))
                  raise)))))
 
-(defn app [queue-backend]
-  (-> (routes queue-backend)
+(defn app [queue-backend storage-backend]
+  (-> (routes queue-backend storage-backend)
       (wrap-content-type)
       (wrap-accept-type)))
 
@@ -137,9 +137,13 @@
 
 (defrecord WebServerService [server handler-fn queue-backend]
   service/IService
-  (start! [self] (start-server! (:server self) (:handler-fn self) (:queue-backend self)))
+  (start! [self] (start-server! (:server self)
+                                (:handler-fn self)
+                                (:queue-backend self)))
   (stop! [self] (stop-server! (:server self) queue-backend)))
 
-(defn new [queue-backend]
+(defn new [queue-backend storage-backend]
   "Returns a new server component instance"
-  (->WebServerService (atom nil) #(app queue-backend) queue-backend))
+  (->WebServerService (atom nil)
+                      #(app queue-backend storage-backend)
+                      queue-backend))
