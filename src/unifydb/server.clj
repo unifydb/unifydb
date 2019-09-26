@@ -10,16 +10,16 @@
             [unifydb.service :as service])
   (:import [java.util UUID]))
 
-(def query-results-agent (agent {}))
+(def query-results (atom {}))
 
-(defn register-result-listener [agent-state query-id callback]
-  (assoc agent-state query-id callback))
+(defn register-result-listener [query-id callback]
+  (swap! query-results #(assoc % query-id callback)))
 
-(defn receive-query-result [agent-state message]
+(defn receive-query-result [message]
   (let [{:keys [id results]} message]
-    (when-let [callback (get agent-state id)]
+    (when-let [callback (get @query-results id)]
       (callback message))
-    (dissoc agent-state id)))
+    (swap! query-results #(dissoc % id))))
 
 (defn translate-json-query [json-query]
   "Translates queries from the JSON-compatible format to
@@ -63,8 +63,7 @@
                           :tx-id (:tx-id (:body request))}
                      :query query-data
                      :id id}]
-      (send query-results-agent
-            #'register-result-listener
+      (register-result-listener
             id
             ;; TODO error handling - what happens if something is down or times out?
             ;; TODO add a timeout
@@ -91,7 +90,7 @@
       (if (= :unsupported body)
         (respond
          {:status 400
-          :body {:message (format "Unsupported content type %s" content-type)}})
+          :body {:message (str "Unsupported content type " content-type)}})
         (handler (assoc request :body body) respond raise)))))
 
 (defn wrap-accept-type [handler]
@@ -123,10 +122,7 @@
 (defn start-server! [server handler-fn queue-backend]
   (when @server (.stop @server))
   ;; TODO add config system and read port from config with default
-  (queue/subscribe queue-backend
-                   :query/results
-                   (fn [msg]
-                     (send query-results-agent #'receive-query-result msg)))
+  (queue/subscribe queue-backend :query/results #(receive-query-result %))
   (reset! server (jetty/run-jetty (handler-fn) {:port 8181
                                                 :async? true
                                                 :join? false})))

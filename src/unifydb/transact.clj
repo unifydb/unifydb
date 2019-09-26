@@ -1,5 +1,6 @@
 (ns unifydb.transact
   (:require [clojure.core.match :refer [match]]
+            [clojure.tools.logging :as log]
             [unifydb.facts :refer [fact-entity
                                    fact-attribute
                                    fact-value
@@ -66,7 +67,13 @@
 
 (def tx-agent
   "The agent responsible for processing transactions serially."
-  (agent nil))
+  (let [a (agent nil)]
+    (set-error-mode! a :continue)
+    (set-error-handler!
+     a
+     (fn [a err]
+       (log/error err "Transact agent error occurred")))
+    a))
 
 (defn transact [conn tx-data]
   "Transacts `tx-data` into the database represented by `conn`."
@@ -83,5 +90,4 @@
       (let [tx-report @(transact (:conn message) (:tx-data message))]
         (queue/publish queue-backend
                        :transact-results
-                       {:id (:id message)
-                        :tx-report tx-report})))}))
+                       (assoc message :tx-report tx-report))))}))
