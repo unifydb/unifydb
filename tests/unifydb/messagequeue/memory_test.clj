@@ -1,8 +1,7 @@
 (ns unifydb.messagequeue.memory-test
   (:require [clojure.test :refer [deftest testing is]]
             [unifydb.messagequeue :as q]
-            [unifydb.messagequeue.memory :as memq]
-            [unifydb.util :as util]))
+            [unifydb.messagequeue.memory :as memq]))
 
 (deftest memq-test
   (testing "Pubsub"
