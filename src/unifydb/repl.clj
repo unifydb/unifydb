@@ -2,6 +2,7 @@
   "A bunch of utilities to make the REPL development experience easier"
   (:require [clojure.edn :as edn]
             [clojure.repl :refer :all]
+            [clojure.test :as test]
             [unifydb.messagequeue :as queue :refer [publish subscribe]]
             [unifydb.messagequeue.memory :as memq]
             [unifydb.query :as query]
