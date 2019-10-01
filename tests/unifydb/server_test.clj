@@ -52,7 +52,6 @@
    :headers {"content-type" "application/json"
              "accept" "application/json"}})
 
-;; TODO this test seemingly-randomly sometimes just hangs forever. Investigate!
 (defservertest query-endpoint [make-request]
   '[[[:unifydb/add "ben" :name "Ben Bitdiddle"]
      [:unifydb/add "ben" :job ["computer" "wizard"]]

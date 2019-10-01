@@ -1,5 +1,7 @@
 (ns unifydb.service
-  (:require [unifydb.messagequeue :as queue]
+  (:require [clojure.tools.logging :as log]
+            [manifold.stream :as s]
+            [unifydb.messagequeue :as queue]
             [unifydb.util :as util]))
 
 (defprotocol IService
@@ -12,12 +14,13 @@
     (swap! (:state self) #(assoc %1 :started true))
     (doseq [[queue-name queue-fn] (:queue-fns self)]
       (let [subscription
-            (queue/subscribe (:queue-backend self) queue-name queue-fn)]
+            (queue/subscribe (:queue-backend self) queue-name)]
         (swap! (:state self)
-               #(assoc %1 :subscriptions (conj (:subscriptions %1) subscription))))))
+               #(assoc %1 :subscriptions (conj (:subscriptions %1) subscription)))
+        (s/consume queue-fn subscription))))
   (stop! [self]
     (doseq [subscription (:subscriptions @(:state self))]
-      (queue/unsubscribe (:queue-backend self) subscription))
+      (s/close! subscription))
     (swap! (:state self) #(assoc %1 :started false))))
 
 (defn make-service [queue-backend queue-fns]

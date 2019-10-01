@@ -1,5 +1,7 @@
 (ns unifydb.query
   (:require [clojure.core.match :refer [match]]
+            [manifold.deferred :as d]
+            [manifold.stream :as s]
             [unifydb.binding :as binding :refer [var? var-name]]
             [unifydb.facts :refer [fact-entity fact-attribute fact-value fact-added?]]
             [unifydb.messagequeue :as queue]
@@ -8,16 +10,14 @@
             [unifydb.storage :as store]
             [unifydb.streaming :as streaming]
             [unifydb.unify :as unify]
-            [unifydb.util :as util]))
+            [unifydb.util :as util :refer [when-let* take-n!]])
+  (:import [java.util UUID]))
 
 (declare qeval)
 
-(defn empty-stream []
-  [])
-
 (defn conjoin [db conjuncts rules frames]
   "Evaluates the conjunction (logical AND) of all `conjuncts` in the context of `frames`.
-   Returns a stream of frames."
+   Returns a seq of frames."
   (if (empty? conjuncts)
     frames
     (conjoin db
@@ -27,9 +27,9 @@
 
 (defn disjoin [db disjuncts rules frames]
   "Evaluates the disjunctions (logical OR) of all `disjuncts` in the context of `frames`.
-   Returns a stream of frames."
+   Returns a seq of frames."
   (if (empty? disjuncts)
-    (empty-stream)
+    []
     (concat (qeval db (first disjuncts) rules frames)
             (disjoin db (rest disjuncts) rules frames))))
 
@@ -45,7 +45,7 @@
 ;; See also: https://en.wikipedia.org/wiki/Negation_as_failure
 ;;           https://en.wikipedia.org/wiki/Closed-world_assumption
 (defn negate [db negatee rules frames]
-  "Evaluates the `negatee` in the context of `frames`, returning a stream of only 
+  "Evaluates the `negatee` in the context of `frames`, returning a seq of only
    those frames for which evaluation fails (i.e. for which the logic query cannot be made true)."
   (mapcat
    (fn [frame]
@@ -85,26 +85,40 @@
           (when (fact-added? most-recent) most-recent)))
       (vals grouped)))))
 
-(defn match-fact [[query frame fact]]
+(defn match-fact [query frame fact]
   (let [match-result (unify/unify-match query fact frame)]
     (if (= match-result :failed)
       nil
       match-result)))
 
+(defn match-callback [queue-backend message]
+  (let [{:keys [match-id query frame fact]} message
+        match-result (match-fact query frame fact)]
+    (queue/publish queue-backend :query/match-results {:match-id match-id
+                                                       :result match-result})))
+
 (defn match-facts [db query frame]
-  "Returns a stream of frames obtained by pattern-matching the `query`
+  "Returns a seq of frames obtained by pattern-matching the `query`
    against the facts in `db` in the context of `frame`.
 
-   The pattern-matching is done in parallel via the streaming backend."
-  (filter #(not (nil? %1))
-          @(queue/qmap
-            (:queue-backend db)
-            :query/match
-            :query/match-results
-            #'match-fact
-            (map #(vector query frame %1)
-                 (process-facts
-                  (store/fetch-facts (:storage-backend db) query (:tx-id db) frame))))))
+   The pattern-matching is done in parallel via the queue backend."
+  (let [facts (process-facts
+               (store/fetch-facts (:storage-backend db)
+                                  query
+                                  (:tx-id db)
+                                  frame))
+        match-id (UUID/randomUUID)
+        match-results (queue/subscribe (:queue-backend db) :query/match-results)]
+    (doseq [fact facts]
+      (queue/publish (:queue-backend db) :query/match {:match-id match-id
+                                                       :query query
+                                                       :frame frame
+                                                       :fact fact}))
+    (->> match-results
+         (s/filter #(= match-id (:match-id %)))
+         (take-n! (count facts))
+         (map :result)
+         (filter #(not (nil? %))))))
 
 (defn rename-vars [rule]
   "Gives all the variables in the rule globally unique names
@@ -137,12 +151,13 @@
       (qeval db (rule-body clean-rule) rules [unify-result]))))
 
 (defn apply-rules [db query rules frame]
+  ;; TODO parallelize this across queue backend as well
   (mapcat #(apply-rule db query rules % frame)
           ;; Only apply rules whose names explicitly match the query
           (filter #(= (first query) (first (rule-conclusion %))) rules)))
 
 (defn simple-query [db query rules frames]
-  "Evaluates a non-compound query, returning a stream of frames."
+  "Evaluates a non-compound query, returning a seq of frames."
   (mapcat
    (fn [frame]
      (concat (match-facts db query frame)
@@ -151,7 +166,7 @@
 
 (defn qeval [db query rules frames]
   "Evaluates a logic query given by `query` in the context of `frames`.
-   Returns a stream of frames."
+   Returns a seq of frames."
   (match (vec query)
          [:and & conjuncts] (conjoin db conjuncts rules frames)
          [:or & disjuncts] (disjoin db disjuncts rules frames)
@@ -218,7 +233,7 @@
    rules))
 
 (defn query [db q]
-  "Runs the query `q` against `db`, returning a stream of
+  "Runs the query `q` against `db`, returning a seq of
    frames with variables bindings."
   (let [{:keys [find where rules]} q
         processed-where (process-where where)
@@ -229,12 +244,13 @@
           (fn [frame]
             (vec (binding/instantiate frame processed-find (fn [v f] v))))))))
 
+(defn query-callback [queue-backend msg]
+  (->> (query (:db msg) (:query msg))
+       (assoc msg :results)
+       (queue/publish queue-backend :query/results)))
+
 (defn new [queue-backend]
-  "Returns a new query component instance."
   (service/make-service
    queue-backend
-   {:query (fn [message]
-             (->> (query (:db message) (:query message))
-                  (assoc message :results)
-                  (queue/publish queue-backend :query/results)))
-    :query/match (queue/qmap-process-fn queue-backend :query/match-results)}))
+   {:query (partial #'query-callback queue-backend)
+    :query/match (partial #'match-callback queue-backend)}))

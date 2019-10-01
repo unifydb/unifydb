@@ -4,6 +4,7 @@
             [clojure.string :as string]
             [compojure.core :as compojure :refer [GET POST]]
             [compojure.route :as route]
+            [manifold.stream :as s]
             [ring.adapter.jetty :as jetty]
             [ring.util.request :as request]
             [unifydb.messagequeue :as queue]
@@ -119,27 +120,32 @@
       (wrap-content-type)
       (wrap-accept-type)))
 
-(defn start-server! [server handler-fn queue-backend]
+(defn start-server! [server handler-fn]
   (when @server (.stop @server))
   ;; TODO add config system and read port from config with default
-  (queue/subscribe queue-backend :query/results #(receive-query-result %))
   (reset! server (jetty/run-jetty (handler-fn) {:port 8181
                                                 :async? true
                                                 :join? false})))
 
-(defn stop-server! [server queue-backend]
-  (queue/unsubscribe queue-backend :query/results)
+(defn stop-server! [server]
   (when @server (.stop @server)))
 
-(defrecord WebServerService [server handler-fn queue-backend]
+(defrecord WebServerService [server handler-fn queue-backend subscriptions]
   service/IService
-  (start! [self] (start-server! (:server self)
-                                (:handler-fn self)
-                                (:queue-backend self)))
-  (stop! [self] (stop-server! (:server self) queue-backend)))
+  (start! [self]
+    (let [query-results (queue/subscribe (:queue-backend self) :query/results)]
+      (swap! subscriptions #(assoc % :query/results query-results))
+      (s/consume #'receive-query-result query-results)
+      (start-server! (:server self)
+                     (:handler-fn self))))
+  (stop! [self]
+    (stop-server! (:server self))
+    (doseq [[_ subscription] @(:subscriptions self)]
+      (s/close! subscription))))
 
 (defn new [queue-backend storage-backend]
   "Returns a new server component instance"
   (->WebServerService (atom nil)
                       #(app queue-backend storage-backend)
-                      queue-backend))
+                      queue-backend
+                      (atom {})))
