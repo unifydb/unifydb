@@ -54,8 +54,9 @@
     (= frame :failed) :failed
     ;; If the patterns are the same, the frame already has the correct bindings
     (= pattern1 pattern2) frame
+    ;; TODO is the following check necessary?
     ;; Nothing should unify with nil (except nil)
-    (or (nil? pattern1) (nil? pattern2)) :failed
+    ;; (or (nil? pattern1) (nil? pattern2)) :failed
     ;; If either of the patterns are the blank signifier _, return the frame without
     ;; binding anything
     (or (= pattern1 '_) (= pattern2 '_)) frame
