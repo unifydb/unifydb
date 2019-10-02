@@ -1,26 +1,16 @@
 (ns unifydb.server
-  (:require [clojure.data.json :as json]
+  (:require [aleph.http :as http]
+            [clojure.data.json :as json]
             [clojure.edn :as edn]
             [clojure.string :as string]
             [compojure.core :as compojure :refer [GET POST]]
             [compojure.route :as route]
+            [manifold.deferred :as d]
             [manifold.stream :as s]
-            [ring.adapter.jetty :as jetty]
             [ring.util.request :as request]
             [unifydb.messagequeue :as queue]
             [unifydb.service :as service])
   (:import [java.util UUID]))
-
-(def query-results (atom {}))
-
-(defn register-result-listener [query-id callback]
-  (swap! query-results #(assoc % query-id callback)))
-
-(defn receive-query-result [message]
-  (let [{:keys [id results]} message]
-    (when-let [callback (get @query-results id)]
-      (callback message))
-    (swap! query-results #(dissoc % id))))
 
 (defn translate-json-query [json-query]
   "Translates queries from the JSON-compatible format to
@@ -52,7 +42,7 @@
     :else edn-result))
 
 (defn query [queue-backend storage-backend]
-  (fn [request respond raise]
+  (fn [request]
     (let [raw-query (:query (:body request))
           query-data (if (= (string/lower-case (request/content-type request))
                             "application/json")
@@ -63,17 +53,14 @@
                           :storage-backend storage-backend
                           :tx-id (:tx-id (:body request))}
                      :query query-data
-                     :id id}]
-      (register-result-listener
-            id
-            ;; TODO error handling - what happens if something is down or times out?
-            ;; TODO add a timeout
-            (fn [message]
-              (respond (if (= (string/lower-case (get (:headers request) "accept"))
-                              "application/json")
-                         (translate-edn-result (:results message))
-                         (:results message)))))
-      (queue/publish queue-backend :query query-msg))))
+                     :id id}
+          ;; TODO if I don't close this, am I creating a new persistent subscription on every request?
+          query-results (queue/subscribe queue-backend :query/results)]
+      (queue/publish queue-backend :query query-msg)
+      (as-> query-results v
+           (s/filter #(= (:id %) id) v)
+           (s/take! v)
+           (d/chain v :results)))))
 
 (defn routes [queue-backend storage-backend]
   (compojure/routes
@@ -82,70 +69,59 @@
     {:body {:message "These aren't the droids you're looking for."}})))
 
 (defn wrap-content-type [handler]
-  (fn [request respond raise]
+  (fn [request]
     (let [content-type (request/content-type request)
           body (condp = (string/lower-case content-type)
                  "application/json" (json/read-str (request/body-string request) :key-fn keyword)
                  "application/edn" (edn/read-string (request/body-string request))
                  :unsupported)]
       (if (= :unsupported body)
-        (respond
+        (d/success-deferred
          {:status 400
           :body {:message (str "Unsupported content type " content-type)}})
-        (handler (assoc request :body body) respond raise)))))
+        (handler (assoc request :body body))))))
 
 (defn wrap-accept-type [handler]
-  (fn [request respond raise]
+  (fn [request]
     (let [accept-type (or (get (:headers request) "accept") "application/json")
           wrapper (condp = (string/lower-case accept-type)
                     "application/json" {:fn json/write-str :type "application/json"}
                     "application/edn" {:fn pr-str :type "application/edn"}
                     {:error (format "Unsupported accept type %s" accept-type)})]
       (if (:error wrapper)
-        (respond {:status 400
-                   :headers {"Content-Type" "application/json"}
-                   :body (json/write-str (:error wrapper))})
-        (handler request
-                 (fn [response]
-                   (respond
-                    (-> response
-                        (#(assoc % :body ((:fn wrapper) (:body %))))
-                        (#(assoc % :headers (assoc (:headers %)
-                                                   "Content-Type"
-                                                   (:type wrapper)))))))
-                 raise)))))
+        (d/success-deferred {:status 400
+                             :headers {"Content-Type" "application/json"}
+                             :body (json/write-str (:error wrapper))})
+        (-> (handler request)
+            (d/chain #(assoc % :body ((:fn wrapper) (:body %)))
+                     #(assoc % :headers
+                             (assoc (:headers %) "Content-Type" (:type wrapper)))))))))
 
-(defn app [queue-backend storage-backend]
-  (-> (routes queue-backend storage-backend)
-      (wrap-content-type)
-      (wrap-accept-type)))
+(defn app [state]
+  (let [{:keys [queue-backend storage-backend]} @state]
+   (-> (routes queue-backend storage-backend)
+       (wrap-content-type)
+       (wrap-accept-type))))
 
-(defn start-server! [server handler-fn]
-  (when @server (.stop @server))
-  ;; TODO add config system and read port from config with default
-  (reset! server (jetty/run-jetty (handler-fn) {:port 8181
-                                                :async? true
-                                                :join? false})))
+(defn start-server! [state]
+  (let [server (:server @state)
+        handler (app state)]
+    (when server (.close server))
+    ;; TODO add config system and read port from config with default
+    (swap! state #(assoc % :server
+                         (http/start-server handler {:port 8181})))))
 
-(defn stop-server! [server]
-  (when @server (.stop @server)))
+(defn stop-server! [state]
+  (let [server (:server @state)]
+    (when server (.close server))))
 
-(defrecord WebServerService [server handler-fn queue-backend subscriptions]
+(defrecord WebServerService [state]
   service/IService
   (start! [self]
-    (let [query-results (queue/subscribe (:queue-backend self) :query/results)]
-      (swap! subscriptions #(assoc % :query/results query-results))
-      (s/consume #'receive-query-result query-results)
-      (start-server! (:server self)
-                     (:handler-fn self))))
+    (start-server! (:state self)))
   (stop! [self]
-    (stop-server! (:server self))
-    (doseq [[_ subscription] @(:subscriptions self)]
-      (s/close! subscription))))
+    (stop-server! (:state self))))
 
 (defn new [queue-backend storage-backend]
-  "Returns a new server component instance"
-  (->WebServerService (atom nil)
-                      #(app queue-backend storage-backend)
-                      queue-backend
-                      (atom {})))
+  (->WebServerService (atom {:queue-backend queue-backend
+                             :storage-backend storage-backend})))

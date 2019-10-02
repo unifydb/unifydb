@@ -1,6 +1,7 @@
 (ns unifydb.server-test
   (:require [clojure.data.json :as json]
             [clojure.test :refer [deftest testing is]]
+            [manifold.deferred :as d]
             [unifydb.messagequeue :as queue]
             [unifydb.messagequeue.memory :as memq]
             [unifydb.query :as query]
@@ -17,12 +18,9 @@
           transact# (transact/new queue#)
           server# (server/new queue# store#)
           ~req-fn (fn [request#]
-                    (let [app# (server/app queue# store#)
-                          response# (promise)
-                          respond# (fn [r#] (deliver response# r#))
-                          raise# (fn [e#] (throw e#))]
-                      (app# request# respond# raise#)
-                      (deref response#)))]
+                    (let [app# (server/app (:state server#))
+                          response# (app# request#)]
+                      @response#))]
       (try
         (service/start! query#)
         (service/start! transact#)
