@@ -12,42 +12,49 @@
             [unifydb.service :as service])
   (:import [java.util UUID]))
 
-(defn translate-json-query [json-query]
-  "Translates queries from the JSON-compatible format to
-   a proper EDN format with keywords, symbols, and variables."
-  (let [val (if (keyword? json-query) (name json-query) json-query)]
-   (cond
-     (string/starts-with? val "_?_") (symbol (str "?" (subs val 3)))
-     (string/starts-with? val "_:_") (keyword (subs val 3))
-     (string/starts-with? val "_'_") (symbol (subs val 3))
-     (map? val) (into {} (map
-                          #(vector (translate-json-query (first %))
-                                   (translate-json-query (second %)))
-                          json-query))
-     (vector? val) (into [] (map translate-json-query json-query))
-     :else json-query)))
-
-(defn translate-edn-result [edn-result]
-  "Translates an EDN-formatted query-result into JSON quasi-edn."
+(defn edn->json [edn-data]
+  "Transforms idiomatic EDN to a format that can be losslessly represented as JSON."
   (cond
-    (keyword? edn-result) (str "_:_" (name edn-result))
-    (and (symbol? edn-result)
-         (string/starts-with? (name edn-result) "?")) (str "_?_" (subs (name edn-result) 1))
-    (symbol? edn-result) (str "_'_" (name edn-result))
-    (map? edn-result) (into {} (map
-                                #(vector (translate-edn-result (first %))
-                                         (translate-edn-result (second %)))
-                                edn-result))
-    (vector? edn-result) (into [] (map translate-edn-result edn-result))
-    :else edn-result))
+    (keyword? edn-data) (str edn-data)
+    (symbol? edn-data) (str "'" edn-data)
+    (and (string? edn-data)
+         (string/starts-with? edn-data ":")) (str "\\" edn-data)
+    (and (string? edn-data)
+         (string/starts-with? edn-data "'")) (str "\\" edn-data)
+    (and (string? edn-data)
+         (string/starts-with? edn-data "\\")) (str "\\" edn-data)
+    (vector? edn-data) (into [] (map edn->json edn-data))
+    (map? edn-data) (into {} (map
+                              #(vector (edn->json (first %))
+                                       (edn->json (second %)))
+                              edn-data))
+    (list? edn-data) (into ["#list"] (map edn->json edn-data))
+    (set? edn-data) (into ["#set"] (map edn->json edn-data))
+    :else edn-data))
+
+(defn json->edn [json-data]
+  "Transforms JSON representing EDN data into actual EDN data. The reverse of edn->json."
+  (cond
+    (and (string? json-data)
+         (string/starts-with? json-data ":")) (keyword (subs json-data 1))
+    (and (string? json-data)
+         (string/starts-with? json-data "'")) (symbol (subs json-data 1))
+    (and (string? json-data)
+         (string/starts-with? json-data "\\")) (subs json-data 1)
+    (and (vector? json-data)
+         (= (first json-data) "#list")) (into '() (map json->edn (rest json-data)))
+    (and (vector? json-data)
+         (= (first json-data) "#set")) (into #{} (map json->edn (rest json-data)))
+    (vector? json-data) (into [] (map json->edn json-data))
+    (map? json-data) (into {} (map
+                               #(vector (json->edn (first %))
+                                        (json->edn (second %)))
+                               json-data))
+    :else json-data))
 
 (defn query [queue-backend storage-backend]
   (fn [request]
-    (let [raw-query (:query (:body request))
-          query-data (if (= (string/lower-case (request/content-type request))
-                            "application/json")
-                       (translate-json-query raw-query)
-                       raw-query)
+    (let [query-data (:query (:body request))
           id (UUID/randomUUID)
           query-msg {:db {:queue-backend queue-backend
                           :storage-backend storage-backend
@@ -72,7 +79,9 @@
   (fn [request]
     (let [content-type (request/content-type request)
           body (condp = (string/lower-case content-type)
-                 "application/json" (json/read-str (request/body-string request) :key-fn keyword)
+                 "application/json" (-> (request/body-string request)
+                                        (json/read-str)
+                                        (json->edn))
                  "application/edn" (edn/read-string (request/body-string request))
                  :unsupported)]
       (if (= :unsupported body)
@@ -85,7 +94,10 @@
   (fn [request]
     (let [accept-type (or (get (:headers request) "accept") "application/json")
           wrapper (condp = (string/lower-case accept-type)
-                    "application/json" {:fn json/write-str :type "application/json"}
+                    "application/json" {:fn #(-> %
+                                                 (edn->json)
+                                                 (json/write-str))
+                                        :type "application/json"}
                     "application/edn" {:fn pr-str :type "application/edn"}
                     {:error (format "Unsupported accept type %s" accept-type)})]
       (if (:error wrapper)

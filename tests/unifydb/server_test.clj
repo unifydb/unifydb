@@ -36,20 +36,6 @@
           (service/stop! transact#)
           (service/stop! query#))))))
 
-(defn edn-request [method uri body]
-  {:uri uri
-   :body (pr-str body)
-   :request-method method
-   :headers {"content-type" "application/edn"
-             "accept" "application/edn"}})
-
-(defn json-request [method uri body]
-  {:uri uri
-   :body (json/write-str (assoc body :query (server/translate-edn-result (:query body))))
-   :request-method method
-   :headers {"content-type" "application/json"
-             "accept" "application/json"}})
-
 (defservertest query-endpoint [make-request]
   '[[[:unifydb/add "ben" :name "Ben Bitdiddle"]
      [:unifydb/add "ben" :job ["computer" "wizard"]]
@@ -60,23 +46,28 @@
      [:unifydb/add "alyssa" :supervisor "ben"]]]
   (testing "/query (EDN)"
     (let [response (make-request
-                    (edn-request :post
-                                 "/query"
-                                 {:query '{:find [?name]
+                    {:request-method :post
+                     :uri "/query"
+                     :headers {"content-type" "application/edn"
+                               "accept" "application/edn"}
+                     :body (prn-str
+                            {:tx-id 3
+                             :query '{:find [?name]
                                            :where [[?e :job ["computer" _]]
-                                                   [?e :name ?name]]}
-                                  :tx-id 3}))]
+                                                   [?e :name ?name]]}})})]
       (is (= response '{:status 200
                         :headers {"Content-Type" "application/edn"}
                         :body "([\"Alyssa P. Hacker\"] [\"Ben Bitdiddle\"])"}))))
   (testing "/query (JSON)"
-    (let [response (make-request
-                    (json-request :post
-                                  "/query"
-                                  {:query '{:find [?name]
-                                            :where [[?e :job ["computer" _]]
-                                                    [?e :name ?name]]}
-                                   :tx-id 3}))]
+    (let [response (make-request {:request-method :post
+                                  :uri "/query"
+                                  :headers {"content-type" "application/json"
+                                            "accept" "application/json"}
+                                  :body (json/write-str
+                                         {":tx-id" 3
+                                          ":query" {":find" ["'?name"]
+                                                    ":where" [["'?e" ":job" ["computer" "'_"]]
+                                                              ["'?e" ":name" "'?name"]]}})})]
       (is (= response '{:status 200
                         :headers {"Content-Type" "application/json"}
                         :body "[[\"Alyssa P. Hacker\"],[\"Ben Bitdiddle\"]]"})))))
