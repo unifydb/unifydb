@@ -3,6 +3,7 @@
   (:require [clojure.edn :as edn]
             [clojure.repl :refer :all]
             [clojure.test :as test]
+            [clojure.pprint :refer [pprint]]
             [unifydb.messagequeue :as queue :refer [publish subscribe]]
             [unifydb.messagequeue.memory :as memq]
             [unifydb.query :as query]
