@@ -1,5 +1,6 @@
 (ns unifydb.server-test
   (:require [clojure.data.json :as json]
+            [clojure.edn :as edn]
             [clojure.test :refer [deftest testing is]]
             [manifold.deferred :as d]
             [unifydb.messagequeue :as queue]
@@ -10,13 +11,13 @@
             [unifydb.storage.memory :as memstore]
             [unifydb.transact :as transact]))
 
-(defmacro defservertest [name [req-fn store-name] txs & body]
+(defmacro defservertest [name [req-fn store-name queue-name] txs & body]
   `(deftest ~name
-    (let [queue# (memq/new)
+    (let [~queue-name (memq/new)
           ~store-name (memstore/new)
-          query# (query/new queue#)
-          transact# (transact/new queue#)
-          server# (server/new queue# ~store-name)
+          query# (query/new ~queue-name)
+          transact# (transact/new ~queue-name)
+          server# (server/new ~queue-name ~store-name)
           ~req-fn (fn [request#]
                     (let [app# (server/app (:state server#))
                           response# (app# request#)]
@@ -26,17 +27,16 @@
         (service/start! transact#)
         (service/start! server#)
         (doseq [tx# ~txs]
-          (queue/publish queue# :transact {:conn {:storage-backend ~store-name
-                                                  :queue-backend queue#}
-                                           :tx-data tx#}))
+          (queue/publish ~queue-name :transact {:conn {:storage-backend ~store-name
+                                                       :queue-backend ~queue-name}
+                                                :tx-data tx#}))
         (Thread/sleep 5)  ;; give the transaction time to process
         ~@body
         (finally
           (service/stop! server#)
           (service/stop! transact#)
           (service/stop! query#))))))
-
-(defservertest query-endpoint [make-request store]
+(defservertest query-endpoint [make-request store queue-backend]
   '[[[:unifydb/add "ben" :name "Ben Bitdiddle"]
      [:unifydb/add "ben" :job ["computer" "wizard"]]
      [:unifydb/add "ben" :salary 60000]
@@ -72,7 +72,7 @@
                         :headers {"Content-Type" "application/json"}
                         :body "[[\"Alyssa P. Hacker\"],[\"Ben Bitdiddle\"]]"})))))
 
-(defservertest transact-endpoint [make-request store]
+(defservertest transact-endpoint [make-request store queue-backend]
   []
   (testing "/transact (EDN)"
     (let [response (make-request
@@ -83,19 +83,27 @@
                      :body (prn-str
                             {:tx-data [[:unifydb/add "ben" :name "Ben Bitdiddle"]
                                        [:unifydb/add "alyssa" :name "Alyssa P. Hacker"]
-                                       [:unifydb/add "alyssa" :supervisor "ben"]]})})]
+                                       [:unifydb/add "alyssa" :supervisor "ben"]]})})
+          tx-instant (as-> (:body response) v
+                       (edn/read-string v)
+                       (:tx-data v)
+                       (filter #(= :unifydb/txInstant (second %)) v)
+                       (first v)
+                       (nth v 2))]
       (is (= response {:status 200
                        :headers {"Content-Type" "application/edn"}
-                       :body (prn-str {:tempids {"ben" 1
-                                                 "alyssa" 2
-                                                 "unifydb.tx" 3}
+                       :body (pr-str {:db-after {:queue-backend {:type :memory
+                                                                  :id (:id queue-backend)}
+                                                  :storage-backend {:type :memory
+                                                                    :id (:id store)}
+                                                  :tx-id 3}
                                        :tx-data [[1 :name "Ben Bitdiddle" 3 true]
                                                  [2 :name "Alyssa P. Hacker" 3 true]
-                                                 [2 :supervisor 1 3 true]]
-                                       :db-after {:tx-id 3
-                                                  :queue-backend {:type :memory}
-                                                  :storage-backend {:type :memory
-                                                                    :id (:id store)}}})}))))
+                                                 [2 :supervisor 1 3 true]
+                                                 [3 :unifydb/txInstant tx-instant 3 true]]
+                                       :tempids {"ben" 1
+                                                 "alyssa" 2
+                                                 "unifydb.tx" 3}})}))))
   (testing "/transact (JSON)"
     (let [response (make-request
                     {:request-method :post
@@ -105,17 +113,25 @@
                      :body (json/write-str
                             {":tx-data" [[":unifydb/add" "ben" ":name" "Ben Bitdiddle"]
                                          [":unifydb/add" "alyssa" ":name" "Alyssa P. Hacker"]
-                                         [":unifydb/add" "alyssa" ":supervisor" "ben"]]})})]
+                                         [":unifydb/add" "alyssa" ":supervisor" "ben"]]})})
+          tx-instant (as-> (:body response) v
+                       (json/read-str v)
+                       (get v ":tx-data")
+                       (filter #(= ":unifydb/txInstant" (second %)) v)
+                       (first v)
+                       (nth v 2))]
       (is (= response {:status 200
                        :headers {"Content-Type" "application/json"}
                        :body (json/write-str
-                              {":tempids" {"ben" 1
-                                           "alyssa" 2
-                                           "unifydb.tx" 3}
-                               ":tx-data" [[1 ":name" "Ben Bitdiddle" 3 true]
-                                           [2 ":name" "Alyssa P. Hacker" 3 true]
-                                           [2 ":supervisor" 1 3 true]]
-                               ":db-after" {":tx-id" 3
-                                            ":queue-backend" {":type" ":memory"}
+                              {":db-after" {":queue-backend" {":type" ":memory"
+                                                              ":id" (:id queue-backend)}
                                             ":storage-backend" {":type" ":memory"
-                                                                ":id" (:id store)}}})})))))
+                                                                ":id" (:id store)}
+                                            ":tx-id" 6}
+                               ":tx-data" [[4 ":name" "Ben Bitdiddle" 6 true]
+                                           [5 ":name" "Alyssa P. Hacker" 6 true]
+                                           [5 ":supervisor" 4 6 true]
+                                           [6 ":unifydb/txInstant" tx-instant 6 true]]
+                               ":tempids" {"ben" 4
+                                           "alyssa" 5
+                                           "unifydb.tx" 6}})})))))
