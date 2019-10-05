@@ -67,11 +67,31 @@
       (as-> query-results v
            (s/filter #(= (:id %) id) v)
            (s/take! v)
-           (d/chain v :results)))))
+           (d/chain v
+                    :results
+                    #(assoc {} :body %))))))
+
+(defn transact [queue-backend storage-backend]
+  (fn [request]
+    (let [tx-data (:tx-data (:body request))
+          id (UUID/randomUUID)
+          tx-msg {:conn {:queue-backend queue-backend
+                         :storage-backend storage-backend}
+                  :tx-data tx-data
+                  :id id}
+          tx-results (queue/subscribe queue-backend :transact/results)]
+      (queue/publish queue-backend :transact tx-msg)
+      (as-> tx-results v
+        (s/filter #(= (:id %) id) v)
+        (s/take! v)
+        (d/chain v
+                 :tx-report
+                 #(assoc {} :body %))))))
 
 (defn routes [queue-backend storage-backend]
   (compojure/routes
    (POST "/query" request (query queue-backend storage-backend))
+   (POST "/transact" request (transact queue-backend storage-backend))
    (route/not-found
     {:body {:message "These aren't the droids you're looking for."}})))
 

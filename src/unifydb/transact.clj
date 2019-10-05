@@ -89,5 +89,5 @@
     (fn [message]
       (let [tx-report @(transact (:conn message) (:tx-data message))]
         (queue/publish queue-backend
-                       :transact-results
+                       :transact/results
                        (assoc message :tx-report tx-report))))}))

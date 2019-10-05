@@ -71,3 +71,45 @@
       (is (= response '{:status 200
                         :headers {"Content-Type" "application/json"}
                         :body "[[\"Alyssa P. Hacker\"],[\"Ben Bitdiddle\"]]"})))))
+
+(defservertest transact-endpoint [make-request]
+  []
+  (testing "/transact (EDN)"
+    (let [response (make-request
+                    {:request-method :post
+                     :uri "/transact"
+                     :headers {"content-type" "application/edn"
+                               "accept" "application/edn"}
+                     :body (prn-str
+                            {:tx-data [[:unifydb/add "ben" :name "Ben Bitdiddle"]
+                                       [:unifydb/add "alyssa" :name "Alyssa P. Hacker"]
+                                       [:unifydb/add "alyssa" :supervisor "ben"]]})})]
+      (is (= response {:status 200
+                       :headers {"Content-Type" "application/edn"}
+                       :body (prn-str {:tempids {"ben" 1
+                                                 "alyssa" 2
+                                                 "unifydb.tx" 3}
+                                       :tx-data [[1 :name "Ben Bitdiddle" 3 true]
+                                                 [2 :name "Alyssa P. Hacker" 3 true]
+                                                 [2 :supervisor 1 3 true]]
+                                       :db-after {:tx-id 3}})}))))
+  (testing "/transact (JSON)"
+    (let [response (make-request
+                    {:request-method :post
+                     :uri "/transact"
+                     :headers {"content-type" "application/json"
+                               "accept" "application/json"}
+                     :body (json/write-str
+                            {":tx-data" [[":unifydb/add" "ben" ":name" "Ben Bitdiddle"]
+                                         [":unifydb/add" "alyssa" ":name" "Alyssa P. Hacker"]
+                                         [":unifydb/add" "alyssa" ":supervisor" "ben"]]})})]
+      (is (= response {:status 200
+                       :headers {"Content-Type" "application/json"}
+                       :body (json/write-str
+                              {":tempids" {"ben" 1
+                                           "alyssa" 2
+                                           "unifydb.tx" 3}
+                               ":tx-data" [[1 ":name" "Ben Bitdiddle" 3 true]
+                                           [2 ":name" "Alyssa P. Hacker" 3 true]
+                                           [2 ":supervisor" 1 3 true]]
+                               ":db-after" {":tx-id" 3}})})))))
