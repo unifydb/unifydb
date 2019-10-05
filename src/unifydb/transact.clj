@@ -59,7 +59,7 @@
         facts (resolve-temp-ids ids raw-facts)
         tx-id (get ids "unifydb.tx")
         tx-report {:db-after (assoc conn :tx-id tx-id)
-                   :tx-data facts
+                   :tx-data (vec facts)
                    :tempids ids}]
     (storage/transact-facts! (:storage-backend conn) facts)
     (deliver result-promise tx-report)
