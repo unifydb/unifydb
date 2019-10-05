@@ -8,7 +8,8 @@
                                    fact-tx-id
                                    fact-added?]]
             [unifydb.util :as util]
-            [unifydb.storage :as storage]))
+            [unifydb.storage :as storage])
+  (:import [java.util UUID]))
 
 (defn var-or-blank? [exp]
   (or (var? exp) (= exp '_)))
@@ -110,26 +111,36 @@
       [_ _]
       (fetch-facts-eavt eavt query tx-id))))
 
-(defrecord InMemoryStorageBackend [eavt avet id-counter]
-  storage/IStorageBackend
-  (transact-facts! [self facts]
-    (let [facts-eavt facts
-          facts-avet (map #(vector (fact-attribute %1)
-                                   (fact-value %1)
-                                   (fact-entity %1)
-                                   (fact-tx-id %1)
-                                   (fact-added? %1))
-                          facts)]
-      (swap! (:eavt self) #(into %1 facts-eavt))
-      (swap! (:avet self) #(into %1 facts-avet)))
-    self)
-  (fetch-facts [self query tx-id frame]
-    (let [instantiated (binding/instantiate frame query (fn [v f] v))]
-      (fetch-facts-from-index self instantiated tx-id)))
-  (get-next-id [self] (swap! (:id-counter self) inc)))
+(def store
+  (atom {:eavt (atom (set/sorted-set-by cmp-fact-vec))
+         :avet (atom (set/sorted-set-by cmp-fact-vec))
+         :id-counter (atom 0)}))
+
+(defmethod storage/transact-facts-impl! :memory [connection facts]
+  (let [facts-eavt facts
+        facts-avet (map #(vector (fact-attribute %1)
+                                 (fact-value %1)
+                                 (fact-entity %1)
+                                 (fact-tx-id %1)
+                                 (fact-added? %1))
+                        facts)]
+    (swap! (:eavt (get @store (:id connection))) #(into %1 facts-eavt))
+    (swap! (:avet (get @store (:id connection))) #(into %1 facts-avet)))
+  connection)
+
+(defmethod storage/fetch-facts-impl :memory [connection query tx-id frame]
+  (let [instantiated (binding/instantiate frame query (fn [v f] v))]
+    (fetch-facts-from-index (get @store (:id connection)) instantiated tx-id)))
+
+(defmethod storage/get-next-id-impl :memory [connection]
+  (swap! (:id-counter (get @store (:id connection))) inc))
 
 (defn new []
-  (->InMemoryStorageBackend
-   (atom (set/sorted-set-by cmp-fact-vec))
-   (atom (set/sorted-set-by cmp-fact-vec))
-   (atom 0)))
+  (let [id (str (UUID/randomUUID))]
+    (swap! store #(assoc % id
+                         {:eavt (atom (set/sorted-set-by cmp-fact-vec))
+                          :avet (atom (set/sorted-set-by cmp-fact-vec))
+                          :id-counter (atom 0)}))
+    {:type :memory
+     :id id}))
+                          

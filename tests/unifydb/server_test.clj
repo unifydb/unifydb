@@ -10,13 +10,13 @@
             [unifydb.storage.memory :as memstore]
             [unifydb.transact :as transact]))
 
-(defmacro defservertest [name [req-fn] txs & body]
+(defmacro defservertest [name [req-fn store-name] txs & body]
   `(deftest ~name
     (let [queue# (memq/new)
-          store# (memstore/new)
+          ~store-name (memstore/new)
           query# (query/new queue#)
           transact# (transact/new queue#)
-          server# (server/new queue# store#)
+          server# (server/new queue# ~store-name)
           ~req-fn (fn [request#]
                     (let [app# (server/app (:state server#))
                           response# (app# request#)]
@@ -26,7 +26,7 @@
         (service/start! transact#)
         (service/start! server#)
         (doseq [tx# ~txs]
-          (queue/publish queue# :transact {:conn {:storage-backend store#
+          (queue/publish queue# :transact {:conn {:storage-backend ~store-name
                                                   :queue-backend queue#}
                                            :tx-data tx#}))
         (Thread/sleep 5)  ;; give the transaction time to process
@@ -36,7 +36,7 @@
           (service/stop! transact#)
           (service/stop! query#))))))
 
-(defservertest query-endpoint [make-request]
+(defservertest query-endpoint [make-request store]
   '[[[:unifydb/add "ben" :name "Ben Bitdiddle"]
      [:unifydb/add "ben" :job ["computer" "wizard"]]
      [:unifydb/add "ben" :salary 60000]
@@ -72,7 +72,7 @@
                         :headers {"Content-Type" "application/json"}
                         :body "[[\"Alyssa P. Hacker\"],[\"Ben Bitdiddle\"]]"})))))
 
-(defservertest transact-endpoint [make-request]
+(defservertest transact-endpoint [make-request store]
   []
   (testing "/transact (EDN)"
     (let [response (make-request
@@ -92,7 +92,10 @@
                                        :tx-data [[1 :name "Ben Bitdiddle" 3 true]
                                                  [2 :name "Alyssa P. Hacker" 3 true]
                                                  [2 :supervisor 1 3 true]]
-                                       :db-after {:tx-id 3}})}))))
+                                       :db-after {:tx-id 3
+                                                  :queue-backend {:type :memory}
+                                                  :storage-backend {:type :memory
+                                                                    :id (:id store)}}})}))))
   (testing "/transact (JSON)"
     (let [response (make-request
                     {:request-method :post
@@ -112,4 +115,7 @@
                                ":tx-data" [[1 ":name" "Ben Bitdiddle" 3 true]
                                            [2 ":name" "Alyssa P. Hacker" 3 true]
                                            [2 ":supervisor" 1 3 true]]
-                               ":db-after" {":tx-id" 3}})})))))
+                               ":db-after" {":tx-id" 3
+                                            ":queue-backend" {":type" ":memory"}
+                                            ":storage-backend" {":type" ":memory"
+                                                                ":id" (:id store)}}})})))))

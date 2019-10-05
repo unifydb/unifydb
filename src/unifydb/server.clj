@@ -55,7 +55,7 @@
 (defn query [queue-backend storage-backend]
   (fn [request]
     (let [query-data (:query (:body request))
-          id (UUID/randomUUID)
+          id (str (UUID/randomUUID))
           query-msg {:db {:queue-backend queue-backend
                           :storage-backend storage-backend
                           :tx-id (:tx-id (:body request))}
@@ -74,7 +74,7 @@
 (defn transact [queue-backend storage-backend]
   (fn [request]
     (let [tx-data (:tx-data (:body request))
-          id (UUID/randomUUID)
+          id (str (UUID/randomUUID))
           tx-msg {:conn {:queue-backend queue-backend
                          :storage-backend storage-backend}
                   :tx-data tx-data

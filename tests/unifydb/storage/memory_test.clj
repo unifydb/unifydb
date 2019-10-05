@@ -10,12 +10,12 @@
                 [2 :name "Machine Z" 1 true]
                 [1 :in-machine 2 2 true]]
         db (-> (mem/new) (store/transact-facts! facts))]
-    (is (= (vec @(:eavt db))
+    (is (= (vec @(:eavt (get @mem/store (:id db))))
            [[1 :color "red" 0 true]
             [1 :in-machine 2 2 true]
             [1 :name "Widget A" 0 true]
             [2 :name "Machine Z" 1 true]]))
-    (is (= (vec @(:avet db))
+    (is (= (vec @(:avet (get @mem/store (:id db))))
            [[:color "red" 1 0 true]
             [:in-machine 2 1 2 true]
             [:name "Machine Z" 2 1 true]
