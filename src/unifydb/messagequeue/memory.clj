@@ -1,14 +1,18 @@
 (ns unifydb.messagequeue.memory
   (:require [manifold.bus :as bus]
-            [unifydb.messagequeue :as q]))
+            [unifydb.messagequeue :as q])
+  (:import [java.util UUID]))
 
-(def bus (atom (bus/event-bus)))
+(def bus (atom {}))
 
 (defmethod q/publish-impl :memory [backend queue message]
-  (bus/publish! @bus queue message))
+  (bus/publish! (get @bus (:id backend)) queue message))
 
 (defmethod q/subscribe-impl :memory [backend queue]
-  (bus/subscribe @bus queue))
+  (bus/subscribe (get @bus (:id backend)) queue))
 
 (defn new []
-  {:type :memory})
+  (let [id (str (UUID/randomUUID))]
+    (swap! bus #(assoc % id (bus/event-bus)))
+    {:type :memory
+     :id id}))
