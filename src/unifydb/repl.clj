@@ -12,15 +12,15 @@
             [unifydb.storage.memory :as memstore]
             [unifydb.transact :as transact]))
 
-(defonce queue (atom (memq/new)))
+(defonce queue {:type :memory})
 
 (defonce storage (atom (memstore/new)))
 
-(defonce server (atom (server/new @queue @storage)))
+(defonce server (atom (server/new queue @storage)))
 
-(defonce query-service (atom (query/new @queue)))
+(defonce query-service (atom (query/new queue)))
 
-(defonce transact-service (atom (transact/new @queue)))
+(defonce transact-service (atom (transact/new queue)))
 
 (defn start-server! []
   (service/start! @server))
@@ -71,12 +71,12 @@
   "Publishes a new transaction to the queue"
   ;; TODO storage and queue arent' serializable...
   ;;   will be a problem with non-in-memory queue backends
-  (publish @queue :transact {:conn {:storage-backend @storage
-                                    :queue-backend @queue}
+  (publish queue :transact {:conn {:storage-backend @storage
+                                    :queue-backend queue}
                              :tx-data tx-data}))
 
 (defn make-request [request]
-  (let [app (server/app @queue @storage)
+  (let [app (server/app queue @storage)
         response (promise)
         respond (fn [r] (deliver response r))
         raise (fn [e] (throw e))]
