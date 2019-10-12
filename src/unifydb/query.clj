@@ -108,7 +108,7 @@
                                   (:tx-id db)
                                   frame))
         match-id (UUID/randomUUID)
-        match-results (queue/subscribe (:queue-backend db) :query/match-results)]
+        match-results (queue/subscribe (:queue-backend db) :query/match-results :query/matchers)]
     (doseq [fact facts]
       (queue/publish (:queue-backend db) :query/match {:match-id match-id
                                                        :query query
@@ -253,4 +253,5 @@
   (service/make-service
    queue-backend
    {:query (partial #'query-callback queue-backend)
-    :query/match (partial #'match-callback queue-backend)}))
+    :query/match (partial #'match-callback queue-backend)}
+   :query/queryers))
