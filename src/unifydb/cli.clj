@@ -4,94 +4,43 @@
             [clojure.tools.cli :as cli])
   (:import [java.io FileNotFoundException]))
 
-(def cmd-name "unifydb")
-
 (def default-config
   {:port 8181})
 
 (defn get-config [default-config config key]
   (or (key config) (key default-config)))
 
-(defmulti cli-command (fn [cmd parent-cmds parent-opts & args] cmd))
+(defn unifydb-usage [opts-summary]
+  (->> ["usage: unifydb [OPTION]... SUBCOMMAND"
+        ""
+        "The UnifyDB command-line interface."
+        ""
+        "OPTIONS"
+        opts-summary
+        ""
+        "SUBCOMMANDS"
+        "  start    Start one or more of the core UnifyDB services"
+        "  help     Display program usage documentation"
+        ""
+        "Run \"unifydb help <SUBCOMMAND>\" for usage information for each subcommand."]
+       (string/join \newline)))
 
-(defmulti cli-help (fn [cmd parent-cmds opts] cmd))
+(defn start-usage [opts-summary]
+  (->> ["usage: unifydb start [OPTION]... SERVICE..."
+        ""
+        "Start one or more of the core UnifyDB services."
+        ""
+        "OPTIONS"
+        opts-summary
+        ""
+        "SERVICES"
+        "  all       Start all the services"
+        "  server    Start the web server"
+        "  query     Start the query service"
+        "  transact  Start the transact service"]
+       (string/join \newline)))
 
-(defmulti cli-description (fn [cmd] cmd))
-
-(defmacro defcommand [cmd [opts parent-opts parent-cmds] description
-                      [& arg-options] [& child-args] & body]
-  "Define a new CLI command. Any child-args must be previously defined."
-  (let [arg-options (conj arg-options ["-h" "--help" "Print this message and exit"])]
-   `(do
-      (defmethod cli-description ~(str cmd) [cmd#]
-        ~description)
-      (defmethod cli-help ~(str cmd) [cmd# parent-cmds# opts#]
-        (println
-         (str "usage: "
-              (string/join " " parent-cmds#)
-              (if parent-cmds# " " "")
-              cmd# " [OPTION]... ARG...\n"
-              (cli-description ~(str cmd)) "\n"
-              "\n"
-              "OPTIONS\n"
-              (:summary opts#) "\n"
-              ~@(when child-args
-                  (apply list
-                         "\n"
-                         "ARGUMENTS\n"
-                         (map (fn [[argname arg-desc]]
-                                (str "  " argname ": "
-                                     (or arg-desc (cli-description argname)) "\n"))
-                              child-args))))))
-      (defmethod cli-command ~(str cmd) [cmd# parent-cmds# parent-opts# & args#]
-        (let [~opts (cli/parse-opts args# ~(vec arg-options) :in-order true)
-              ~parent-opts parent-opts#
-              ~parent-cmds parent-cmds#]
-          (if (:help (:options ~opts))
-            (cli-help ~(str cmd) (vec (map str parent-cmds#)) ~opts)
-            (do ~@body)))))))
-
-(defcommand server [opts parent-opts parent-cmds]
-  "Start the web server."
-  [] [])
-
-(defcommand query [opts parent-opts parent-cmds]
-  "Start the query service."
-  [] [])
-
-(defcommand transact [opts parent-opts parent-cmds]
-  "Start the transact service."
-  [] [])
-
-(defcommand all [opts parent-opts parent-cmds]
-  "Start all UnifyDB services."
-  [] [])
-                      
-(defcommand start [opts parent-opts parent-cmds]
-  "Start one or more UnifyDB components."
-  []
-  [["all"]
-   ["server"]
-   ["query"]
-   ["transact"]]
-  (cond
-    (some #{"all"} (:arguments opts))
-    (cli-command "all" (conj parent-cmds "start") opts)
-    (first (:arguments opts))
-    (apply cli-command
-           (first (:arguments opts))
-           (conj parent-cmds "start")
-           opts
-           (rest (:arguments opts)))
-    :else (cli-help "start" parent-cmds opts)))
-
-(defcommand help [opts parent-opts parent-cmds]
-  "Display help message."
-  [] []
-  (cli-help "unifydb" [] parent-opts))
-
-(defcommand unifydb [opts parent-opts parent-cmds]
-  "The UnifyDB command-line interface."
+(def unifydb-opts
   [["-c" "--config FILE" "Configuration file path"
     :default-fn (fn [opts]
                   (try
@@ -101,12 +50,56 @@
     :parse-fn (fn [path]
                 (try
                   (edn/read-string (slurp path))
-                  (catch FileNotFoundException ex default-config)))]]
-  [["start"] ["help"]]
-  (cond
-    (first (:arguments opts))
-    (apply cli-command (first (:arguments opts)) [cmd-name] opts (rest (:arguments opts)))
-    :else (cli-command "help" [] opts)))
+                  (catch FileNotFoundException ex default-config)))]
+   ["-h" "--help" "Display this message and exit"]])
+
+(def start-opts
+  [["-h" "--help" "Display this message and exit"]])
+
+(def help-opts [])
+
+(defn start-server [config])
+
+(defn start-query [config])
+
+(defn start-transact [config])
+
+(defn start [config & args]
+  "Start one or more of the core UnifyDB services."
+  (let [opts (cli/parse-opts args start-opts :in-order true)
+        services (if (some #{"all"} (:arguments opts))
+                   ["server" "query" "transact"]
+                   (filter #(some #{%} (:arguments opts))
+                           ["server" "query" "transact"]))]
+    (cond
+      (:help (:options opts)) {:exit-message (start-usage (:summary opts)) :ok? true}
+      (not (empty? services)) () ;; TODO
+      :else {:exit-message (start-usage (:summary opts))})))
+
+(defn help [config & args]
+  "Display program usage documentation."
+  (let [opts (cli/parse-opts args help-opts :in-order true)
+        subcmd (first (:arguments opts))]
+    (cond
+      (= subcmd "start") {:exit-message (start-usage (:summary (cli/parse-opts [] start-opts))) :ok? true}
+      (nil? subcmd) {:exit-message (unifydb-usage (:summary (cli/parse-opts [] unifydb-opts))) :ok? true}
+      :else {:exit-message (unifydb-usage (cli/summarize unifydb-opts))})))
+
+(defn unifydb [& args]
+  "The UnifyDB command-line interface."
+  (let [opts (cli/parse-opts args unifydb-opts :in-order true)
+        config (:config (:options opts))
+        subcmd (first (:arguments opts))
+        subcmd-args (rest (:arguments opts))]
+    (cond
+      (:help (:options opts)) {:exit-message (unifydb-usage (:summary opts)) :ok? true}
+      (= "start" subcmd) (apply start config subcmd-args)
+      (= "help" subcmd) (apply help config subcmd-args)
+      :else {:exit-message (unifydb-usage (:summary opts))})))
+                                          
 
 (defn -main [& args]
-  (apply cli-command "unifydb" nil {} args))
+  (let [{:keys [exit-message ok?]} (apply unifydb args)]
+    (when exit-message (println exit-message))
+    (System/exit (if ok? 0 1))))
+  
