@@ -9,7 +9,8 @@
             [manifold.stream :as s]
             [ring.util.request :as request]
             [unifydb.messagequeue :as queue]
-            [unifydb.service :as service])
+            [unifydb.service :as service]
+            [unifydb.structlog :as log])
   (:import [java.util UUID]))
 
 (defn edn->json [edn-data]
@@ -129,9 +130,21 @@
                      #(assoc % :headers
                              (assoc (:headers %) "Content-Type" (:type wrapper)))))))))
 
+(defn wrap-logging [handler]
+  (fn [request]
+    (let [id (str (UUID/randomUUID))]
+      (log/info "Received request" :request request :request-id id)
+      (let [res (handler request)]
+        (d/chain
+         res
+         (fn [response]
+           (log/info "Returning response" :response response :request-id id)
+           response))))))
+
 (defn app [state]
   (let [{:keys [queue-backend storage-backend]} @state]
    (-> (routes queue-backend storage-backend)
+       (wrap-logging)
        (wrap-content-type)
        (wrap-accept-type))))
 
