@@ -10,7 +10,10 @@
             [unifydb.service :as service]
             [unifydb.server :as server]
             [unifydb.storage.memory :as memstore]
+            [unifydb.structlog :as log]
             [unifydb.transact :as transact]))
+
+(log/set-log-formatter! log/human-format)
 
 (defonce queue {:type :memory})
 
