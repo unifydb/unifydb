@@ -5,8 +5,7 @@
             [unifydb.query :as query]
             [unifydb.service :as service]
             [unifydb.storage :as store]
-            [unifydb.storage.memory :as memstore]
-            [unifydb.streaming.threadpool :as pool]))
+            [unifydb.storage.memory :as memstore]))
 
 (defmacro defquerytest [name [storage-backend queue-backend] facts & body]
   `(deftest ~name

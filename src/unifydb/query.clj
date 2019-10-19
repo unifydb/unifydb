@@ -8,7 +8,6 @@
             [unifydb.rules :refer [rule-body rule-conclusion]]
             [unifydb.service :as service]
             [unifydb.storage :as store]
-            [unifydb.streaming :as streaming]
             [unifydb.unify :as unify]
             [unifydb.util :as util :refer [when-let* take-n!]])
   (:import [java.util UUID]))
