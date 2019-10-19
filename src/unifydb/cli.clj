@@ -1,14 +1,22 @@
 (ns unifydb.cli
   (:require [clojure.edn :as edn]
             [clojure.string :as string]
-            [clojure.tools.cli :as cli])
+            [clojure.tools.cli :as cli]
+            [clojure.tools.logging :as log]
+            [unifydb.query :as query]
+            [unifydb.server :as server]
+            [unifydb.service :as service]
+            [unifydb.transact :as transact]
+            ;; The backend implementations are imported to register their multimethods.
+            ;; It would be nice if there was a way to set things up so this isn't necessary...
+            [unifydb.messagequeue.memory]
+            [unifydb.storage.memory])
   (:import [java.io FileNotFoundException]))
 
 (def default-config
-  {:port 8181})
-
-(defn get-config [default-config config key]
-  (or (key config) (key default-config)))
+  {:port 8181
+   :queue-backend {:type :memory}
+   :storage-backend {:type :memory}})
 
 (defn unifydb-usage [opts-summary]
   (->> ["usage: unifydb [OPTION]... SUBCOMMAND"
@@ -64,6 +72,28 @@
 
 (defn start-transact [config])
 
+(defn start-services! [config services]
+  (let [queue-backend (:queue-backend config)
+        storage-backend (:storage-backend config)
+        service-impls (map #(condp = %
+                              "server" (server/new queue-backend storage-backend)
+                              "query" (query/new queue-backend)
+                              "transact" (transact/new queue-backend))
+                           services)]
+    (log/info "Starting services " services)
+    (doseq [service service-impls]
+      (service/start! service))
+    (-> (Runtime/getRuntime)
+        (.addShutdownHook
+         (Thread.
+          (fn []
+            (log/info "Shutting down services " services)
+            (doseq [service service-impls]
+              (service/stop! service))))))
+    ;; Main loop
+    (while true)))
+      
+
 (defn start [config & args]
   "Start one or more of the core UnifyDB services."
   (let [opts (cli/parse-opts args start-opts :in-order true)
@@ -73,7 +103,7 @@
                            ["server" "query" "transact"]))]
     (cond
       (:help (:options opts)) {:exit-message (start-usage (:summary opts)) :ok? true}
-      (not (empty? services)) () ;; TODO
+      (not (empty? services)) (start-services! config services)
       :else {:exit-message (start-usage (:summary opts))})))
 
 (defn help [config & args]
