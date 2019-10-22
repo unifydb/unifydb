@@ -2,7 +2,6 @@
   (:require [clojure.edn :as edn]
             [clojure.string :as string]
             [clojure.tools.cli :as cli]
-            [clojure.tools.logging :as log]
             [unifydb.query :as query]
             [unifydb.server :as server]
             [unifydb.service :as service]
@@ -10,7 +9,8 @@
             ;; The backend implementations are imported to register their multimethods.
             ;; It would be nice if there was a way to set things up so this isn't necessary...
             [unifydb.messagequeue.memory]
-            [unifydb.storage.memory])
+            [unifydb.storage.memory]
+            [unifydb.structlog :as log])
   (:import [java.io FileNotFoundException]))
 
 (def default-config
@@ -80,14 +80,14 @@
                               "query" (query/new queue-backend)
                               "transact" (transact/new queue-backend))
                            services)]
-    (log/info "Starting services " services)
+    (log/info "Starting services" :services services)
     (doseq [service service-impls]
       (service/start! service))
     (-> (Runtime/getRuntime)
         (.addShutdownHook
          (Thread.
           (fn []
-            (log/info "Shutting down services " services)
+            (log/info "Shutting down services " :services services)
             (doseq [service service-impls]
               (service/stop! service))))))
     ;; Main loop
