@@ -8,8 +8,7 @@
                                    fact-tx-id
                                    fact-added?]]
             [unifydb.util :as util]
-            [unifydb.storage :as storage])
-  (:import [java.util UUID]))
+            [unifydb.storage :as storage]))
 
 (defn var-or-blank? [exp]
   (or (var? exp) (= exp '_)))
@@ -124,23 +123,13 @@
                                  (fact-tx-id %1)
                                  (fact-added? %1))
                         facts)]
-    (swap! (:eavt (get @store (:id connection))) #(into %1 facts-eavt))
-    (swap! (:avet (get @store (:id connection))) #(into %1 facts-avet)))
+    (swap! (:eavt @store) #(into %1 facts-eavt))
+    (swap! (:avet @store) #(into %1 facts-avet)))
   connection)
 
 (defmethod storage/fetch-facts-impl :memory [connection query tx-id frame]
   (let [instantiated (binding/instantiate frame query (fn [v f] v))]
-    (fetch-facts-from-index (get @store (:id connection)) instantiated tx-id)))
+    (fetch-facts-from-index @store instantiated tx-id)))
 
 (defmethod storage/get-next-id-impl :memory [connection]
-  (swap! (:id-counter (get @store (:id connection))) inc))
-
-(defn new []
-  (let [id (str (UUID/randomUUID))]
-    (swap! store #(assoc % id
-                         {:eavt (atom (set/sorted-set-by cmp-fact-vec))
-                          :avet (atom (set/sorted-set-by cmp-fact-vec))
-                          :id-counter (atom 0)}))
-    {:type :memory
-     :id id}))
-                          
+  (swap! (:id-counter @store) inc))

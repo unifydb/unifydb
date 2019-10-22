@@ -17,9 +17,9 @@
 
 (defonce queue {:type :memory})
 
-(defonce storage (atom (memstore/new)))
+(defonce storage {:type :memory})
 
-(defonce server (atom (server/new queue @storage)))
+(defonce server (atom (server/new queue storage)))
 
 (defonce query-service (atom (query/new queue)))
 
@@ -74,12 +74,12 @@
   "Publishes a new transaction to the queue"
   ;; TODO storage and queue arent' serializable...
   ;;   will be a problem with non-in-memory queue backends
-  (publish queue :transact {:conn {:storage-backend @storage
+  (publish queue :transact {:conn {:storage-backend storage
                                     :queue-backend queue}
                              :tx-data tx-data}))
 
 (defn make-request [request]
-  (let [app (server/app queue @storage)
+  (let [app (server/app queue storage)
         response (promise)
         respond (fn [r] (deliver response r))
         raise (fn [e] (throw e))]
