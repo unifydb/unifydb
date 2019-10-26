@@ -29,10 +29,9 @@
   (format "%s [%s] - %s %s"
           (-> msg (:level) (name) (string/upper-case))
           (:ns msg)
-          (-> msg (:log) (:event))
+          (:message msg)
           (-> msg
-              (:log)
-              (dissoc :event)
+              (:data)
               (#(reduce
                  (fn [acc [k v]] (str acc (name k) "=" (pr-str v) " "))
                  ""
@@ -58,7 +57,8 @@
          log# {:ns (symbol (str ns#))
                :level ~level
                :timestamp (.getTime (java.util.Date.))
-               :log (assoc data-map# :event ~msg)}]
+               :message ~msg
+               :data data-map#}]
      (log* ~level log#)))
 
 (defmacro trace [msg & data]
