@@ -5,6 +5,7 @@
             [clj-logging-config.log4j :as logconfig]))
 
 ;; TODO add support for logging throwables
+;; TODO capture exceptions from manifold stream errors and put them into a structured format
 
 ;; TODO read in config from unifyDB config.edn file
 ;; TODO instead of hard-coding the logger here support multiple loggers
