@@ -26,14 +26,15 @@
 (def json-format json/write-str)
 
 (defn human-format [msg]
-  (format "%s - %s %s"
+  (format "%s [%s] - %s %s"
           (-> msg (:level) (name) (string/upper-case))
+          (:ns msg)
           (-> msg (:log) (:event))
           (-> msg
               (:log)
               (dissoc :event)
               (#(reduce
-                 (fn [acc [k v]] (str acc (name k) "=" v " "))
+                 (fn [acc [k v]] (str acc (name k) "=" (pr-str v) " "))
                  ""
                  %))
               (string/trim))))
