@@ -116,6 +116,11 @@
          :avet (atom (set/sorted-set-by cmp-fact-vec))
          :id-counter (atom 0)}))
 
+(defn empty-store! []
+  (reset! store {:eavt (atom (set/sorted-set-by cmp-fact-vec))
+                 :avet (atom (set/sorted-set-by cmp-fact-vec))
+                 :id-counter (atom 0)}))
+
 (defmethod storage/transact-facts-impl! :memory [connection facts]
   (let [facts-eavt facts
         facts-avet (map #(vector (fact-attribute %1)
