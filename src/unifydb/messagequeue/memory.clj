@@ -32,20 +32,22 @@
 (defn send-out-message! [queue group message]
   "Sends out the message to only one member of the group."
   (let [chosen-member (choose-group-member queue group)]
-    (log/debug "Chose group member" :chosen-member chosen-member)
     (when chosen-member
      (s/put! chosen-member message))))
 
 (defn remove-subscriber! [queue group subscriber-stream queue-stream]
+  (log/debug "Removing subscriber." :queue queue :group group :subscriber subscriber-stream)
   (swap!
    state
    #(assoc-in % [:queues queue :groups group :members]
               (remove (partial = subscriber-stream)
                       (get-in % [:queues queue :groups group :members]))))
   (when (empty (get-in @state [:queues queue :groups group :members] []))
+    (log/debug "Removing group." :queue queue :group group)
     (swap! state #(assoc-in % [:queues queue]
                             (dissoc (get-in % [:queues queue :groups]) group))))
   (when (empty (get-in @state [:queues queue :groups] []))
+    (log/debug "Closing queue subscription and removing queue." :queue queue)
     (s/close! queue-stream)
     (swap! state #(assoc % :queues (dissoc (:queues %) queue)))))
 
