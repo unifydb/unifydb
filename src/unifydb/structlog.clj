@@ -53,7 +53,7 @@
 (defmacro log [level msg & data]
   (when-not (= (mod (count data) 2) 0)
     (throw (IllegalArgumentException. "Expected an even number of data forms")))
-  `(let [ns# *ns*
+  `(let [ns# ~*ns*
          data-map# (apply hash-map (list ~@data))
          log# {:ns (symbol (str ns#))
                :level ~level
