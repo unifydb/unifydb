@@ -63,9 +63,11 @@
 (defn stop-system! []
   (stop-query-service!)
   (stop-transact-service!)
-  (stop-server!))
+  (stop-server!)
+  (memq/reset-state!))
 
 (defn restart-system! []
+  (memq/reset-state!)
   (restart-query-service!)
   (restart-transact-service!)
   (restart-server!))
