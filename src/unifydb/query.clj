@@ -1,4 +1,5 @@
 (ns unifydb.query
+  (:refer-clojure :exclude [var?])
   (:require [clojure.core.match :refer [match]]
             [manifold.deferred :as d]
             [manifold.stream :as s]

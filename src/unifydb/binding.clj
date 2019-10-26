@@ -1,4 +1,5 @@
 (ns unifydb.binding
+  (:refer-clojure :exclude [var?])
   (:require [unifydb.util :as util]))
 
 (defn var? [exp]

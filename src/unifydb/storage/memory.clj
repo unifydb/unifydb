@@ -1,4 +1,5 @@
 (ns unifydb.storage.memory
+  (:refer-clojure :exclude [var?])
   (:require [clojure.core.match :refer [match]]
             [me.tonsky.persistent-sorted-set :as set]
             [unifydb.binding :as binding :refer [var?]]

@@ -1,4 +1,5 @@
 (ns unifydb.unify
+  (:refer-clojure :exclude [var?])
   (:require [unifydb.binding :refer [var? frame-binding extend-frame]]
             [unifydb.util :as util]))
 
