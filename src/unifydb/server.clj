@@ -62,7 +62,6 @@
                           :tx-id (:tx-id (:body request))}
                      :query query-data
                      :id id}
-          ;; TODO if I don't close this, am I creating a new persistent subscription on every request?
           query-results (queue/subscribe queue-backend :query/results)]
       (queue/publish queue-backend :query query-msg)
       (as-> query-results v
@@ -70,7 +69,8 @@
            (s/take! v)
            (d/chain v
                     :results
-                    #(assoc {} :body %))))))
+                    #(assoc {} :body %))
+           (d/chain v #(do (s/close! query-results) %))))))
 
 (defn transact [queue-backend storage-backend]
   (fn [request]
@@ -87,7 +87,8 @@
         (s/take! v)
         (d/chain v
                  :tx-report
-                 #(assoc {} :body %))))))
+                 #(assoc {} :body %))
+        (d/chain v #(do (s/close! tx-results) %))))))
 
 (defn routes [queue-backend storage-backend]
   (compojure/routes
