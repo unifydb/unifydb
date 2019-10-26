@@ -23,6 +23,7 @@
 
 (def edn-format pr-str)
 
+;; TODO this will blow up if it encounters a data object that isn't json-serializable
 (def json-format json/write-str)
 
 (defn human-format [msg]
