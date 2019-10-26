@@ -118,7 +118,8 @@
          (s/filter #(= match-id (:match-id %)))
          (take-n! (count facts))
          (map :result)
-         (filter #(not (nil? %))))))
+         (filter #(not (nil? %)))
+         (#(do (s/close! match-results) %)))))
 
 (defn rename-vars [rule]
   "Gives all the variables in the rule globally unique names
