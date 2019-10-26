@@ -13,7 +13,7 @@
             [unifydb.structlog :as log]
             [unifydb.transact :as transact]))
 
-(log/set-log-formatter! log/human-format)
+(log/set-log-formatter! #'log/human-format)
 
 (defonce queue {:type :memory})
 
