@@ -2,7 +2,6 @@
   "A bunch of utilities to make the REPL development experience easier"
   (:require [clojure.edn :as edn]
             [clojure.repl :refer :all]
-            [clojure.test :as test]
             [clojure.pprint :refer [pprint]]
             [unifydb.messagequeue :as queue :refer [publish subscribe]]
             [unifydb.messagequeue.memory :as memq]
@@ -11,7 +10,8 @@
             [unifydb.server :as server]
             [unifydb.storage.memory :as memstore]
             [unifydb.structlog :as log]
-            [unifydb.transact :as transact]))
+            [unifydb.transact :as transact]
+            [unifydb.test-runner :as tests]))
 
 (log/set-log-formatter! #'log/human-format)
 
