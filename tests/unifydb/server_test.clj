@@ -13,8 +13,8 @@
 
 (defmacro defservertest [name [req-fn store-name queue-name] txs & body]
   `(deftest ~name
-    (let [~queue-name (memq/new)
-          ~store-name (memstore/new)
+    (let [~queue-name {:type :memory}
+          ~store-name {:type :memory}
           query# (query/new ~queue-name)
           transact# (transact/new ~queue-name)
           server# (server/new ~queue-name ~store-name)
@@ -33,6 +33,8 @@
         (Thread/sleep 5)  ;; give the transaction time to process
         ~@body
         (finally
+          (memstore/empty-store!)
+          (memq/reset-state!)
           (service/stop! server#)
           (service/stop! transact#)
           (service/stop! query#))))))
@@ -92,10 +94,8 @@
                        (nth v 2))]
       (is (= response {:status 200
                        :headers {"Content-Type" "application/edn"}
-                       :body (pr-str {:db-after {:queue-backend {:type :memory
-                                                                  :id (:id queue-backend)}
-                                                  :storage-backend {:type :memory
-                                                                    :id (:id store)}
+                       :body (pr-str {:db-after {:queue-backend {:type :memory}
+                                                  :storage-backend {:type :memory}
                                                   :tx-id 3}
                                        :tx-data [[1 :name "Ben Bitdiddle" 3 true]
                                                  [2 :name "Alyssa P. Hacker" 3 true]
@@ -123,10 +123,8 @@
       (is (= response {:status 200
                        :headers {"Content-Type" "application/json"}
                        :body (json/write-str
-                              {":db-after" {":queue-backend" {":type" ":memory"
-                                                              ":id" (:id queue-backend)}
-                                            ":storage-backend" {":type" ":memory"
-                                                                ":id" (:id store)}
+                              {":db-after" {":queue-backend" {":type" ":memory"}
+                                            ":storage-backend" {":type" ":memory"}
                                             ":tx-id" 6}
                                ":tx-data" [[4 ":name" "Ben Bitdiddle" 6 true]
                                            [5 ":name" "Alyssa P. Hacker" 6 true]

@@ -10,13 +10,15 @@
 (defmacro defquerytest [name [storage-backend queue-backend] facts & body]
   `(deftest ~name
      (let [facts# ~facts
-           ~storage-backend (-> (memstore/new) (store/transact-facts! facts#))
-           ~queue-backend (memqueue/new)
+           ~storage-backend (-> {:type :memory} (store/transact-facts! facts#))
+           ~queue-backend {:type :memory}
            query-service# (query/new ~queue-backend)]
        (try
          (service/start! query-service#)
          ~@body
          (finally
+           (memstore/empty-store!)
+           (memqueue/reset-state!)
            (service/stop! query-service#))))))
 
 (defquerytest simple-matching [storage-backend queue-backend]

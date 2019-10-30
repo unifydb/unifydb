@@ -9,17 +9,18 @@
                 [1 :name "Widget A" 0 true]
                 [2 :name "Machine Z" 1 true]
                 [1 :in-machine 2 2 true]]
-        db (-> (mem/new) (store/transact-facts! facts))]
-    (is (= (vec @(:eavt (get @mem/store (:id db))))
+        db (-> {:type :memory} (store/transact-facts! facts))]
+    (is (= (vec @(:eavt @mem/store))
            [[1 :color "red" 0 true]
             [1 :in-machine 2 2 true]
             [1 :name "Widget A" 0 true]
             [2 :name "Machine Z" 1 true]]))
-    (is (= (vec @(:avet (get @mem/store (:id db))))
+    (is (= (vec @(:avet @mem/store))
            [[:color "red" 1 0 true]
             [:in-machine 2 1 2 true]
             [:name "Machine Z" 2 1 true]
-            [:name "Widget A" 1 0 true]]))))    
+            [:name "Widget A" 1 0 true]]))
+    (mem/empty-store!)))
 
 
 (deftest test-fetch-facts
@@ -32,7 +33,7 @@
                [2 :supervisor 1 2 true]
                [2 :address [:cambridge [:mass :ave] 78] 2 true]
                [2 :address [:cambridge [:mass :ave] 78] 3 false]]
-        db (-> (mem/new) (store/transact-facts! facts))]
+        db (-> {:type :memory} (store/transact-facts! facts))]
     (doseq [{:keys [query tx-id frame expected]}
             [{:query '[[? e] :name "Ben Bitdiddle"]
               :tx-id 3
@@ -73,4 +74,5 @@
               :expected [[2 :address [:cambridge [:mass :ave] 78] 2 true]
                          [2 :address [:cambridge [:mass :ave] 78] 3 false]]}]]
       (is (= (store/fetch-facts db query tx-id frame)
-             expected)))))
+             expected)))
+    (mem/empty-store!)))

@@ -5,7 +5,7 @@
             [unifydb.transact :as t]))
 
 (deftest transact-test
-  (let [conn {:storage-backend (memdb/new)}
+  (let [conn {:storage-backend {:type :memory}}
         tx-data [[:unifydb/add "ben" :name "Ben Bitdiddle"]
                  [:unifydb/add "ben" :salary 60000]
                  [:unifydb/add "alyssa" :name "Alyssa P. Hacker"]
@@ -29,4 +29,5 @@
       (is (= java.lang.Long (type (fact-value (last facts)))))
       (is (>= (System/currentTimeMillis) (fact-value (last facts)))))
     (testing "Returning a new DB"
-      (is (= (get tempids "unifydb.tx") (:tx-id db-after))))))
+      (is (= (get tempids "unifydb.tx") (:tx-id db-after))))
+    (memdb/empty-store!)))
