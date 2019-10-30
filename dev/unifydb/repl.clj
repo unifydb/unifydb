@@ -1,6 +1,7 @@
 (ns unifydb.repl
   "A bunch of utilities to make the REPL development experience easier"
-  (:require [clojure.edn :as edn]
+  (:require [cognitect.test-runner :as test-runner]
+            [clojure.edn :as edn]
             [clojure.repl :refer :all]
             [clojure.pprint :refer [pprint]]
             [unifydb.messagequeue :as queue :refer [publish subscribe]]
@@ -10,10 +11,12 @@
             [unifydb.server :as server]
             [unifydb.storage.memory :as memstore]
             [unifydb.structlog :as log]
-            [unifydb.transact :as transact]
-            [unifydb.test-runner :as tests]))
+            [unifydb.transact :as transact]))
 
 (log/set-log-formatter! #'log/human-format)
+
+(defn run-tests []
+  (test-runner/test {}))
 
 (defonce queue {:type :memory})
 
