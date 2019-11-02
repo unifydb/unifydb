@@ -1,6 +1,7 @@
 (ns unifydb.transact
   (:require [clojure.core.match :refer [match]]
             [clojure.tools.logging :as log]
+            [manifold.stream :as s]
             [unifydb.facts :refer [fact-entity
                                    fact-attribute
                                    fact-value
@@ -51,7 +52,7 @@
        [e (fact-attribute fact) v tx-id (fact-added? fact)]))
    facts))
 
-(defn do-transaction [_ conn tx-data result-promise]
+(defn do-transaction [conn tx-data]
   "Does all necessary processing of `tx-data` and sends it off to the storage backend."
   (let [with-tx (into tx-data (make-new-tx-facts))
         raw-facts (process-tx-data with-tx)
@@ -62,33 +63,29 @@
                    :tx-data (vec facts)
                    :tempids ids}]
     (storage/transact-facts! (:storage-backend conn) facts)
-    (deliver result-promise tx-report)
-    nil))
+    tx-report))
 
-(def tx-agent
-  "The agent responsible for processing transactions serially."
-  (let [a (agent nil)]
-    (set-error-mode! a :continue)
-    (set-error-handler!
-     a
-     (fn [a err]
-       (log/error err "Transact agent error occurred")))
-    a))
+(defn transact-loop [queue-backend state]
+  (when-let [message (and
+                      (not (s/drained? (:subscription @state)))
+                      (deref (s/take! (:subscription @state))))]
+   (let [{:keys [conn tx-data]} message
+         tx-report (do-transaction conn tx-data)]
+     (queue/publish queue-backend
+                    :transact/results
+                    (assoc message :tx-report tx-report))
+     (recur queue-backend state))))
 
-(defn transact [conn tx-data]
-  "Transacts `tx-data` into the database represented by `conn`."
-  (let [result (promise)]
-    (send-off tx-agent do-transaction conn tx-data result)
-    result))
+(defrecord TransactService [queue-backend state]
+  service/IService
+  (start! [self]
+    (let [subscription (queue/subscribe queue-backend :transact)
+          transact-thread (Thread. #(transact-loop queue-backend (:state self)))]
+      (swap! (:state self) #(assoc % :subscription subscription))
+      (.start transact-thread)))
+  (stop! [self]
+    (s/close! (:subscription @state))))
 
 (defn new [queue-backend]
   "Returns a new transact component instance."
-  (service/make-service
-   queue-backend
-   {:transact
-    (fn [message]
-      (let [tx-report @(transact (:conn message) (:tx-data message))]
-        (queue/publish queue-backend
-                       :transact/results
-                       (assoc message :tx-report tx-report))))}
-   :transact/transactors))
+  (->TransactService queue-backend (atom {})))
