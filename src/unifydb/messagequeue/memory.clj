@@ -77,7 +77,7 @@
   (when-not (get-in @state [:queues queue])
     (add-queue-subscription! queue group))
   (let [queue-stream (get-in @state [:queues queue :subscription])
-        subscriber-stream (s/stream 200)]
+        subscriber-stream (s/stream)]
     (s/on-closed
      subscriber-stream
      #(remove-subscriber! queue group subscriber-stream queue-stream))
