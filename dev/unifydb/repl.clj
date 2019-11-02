@@ -4,6 +4,7 @@
             [clojure.edn :as edn]
             [clojure.repl :refer :all]
             [clojure.pprint :refer [pprint]]
+            [clojure.test :refer [run-tests]]
             [unifydb.messagequeue :as queue :refer [publish subscribe]]
             [unifydb.messagequeue.memory :as memq]
             [unifydb.query :as query]
@@ -15,7 +16,7 @@
 
 (log/set-log-formatter! #'log/human-format)
 
-(defn run-tests []
+(defn run-all-tests []
   (test-runner/test {}))
 
 (defonce queue {:type :memory})
