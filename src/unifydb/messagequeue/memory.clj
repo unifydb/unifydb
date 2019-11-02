@@ -52,6 +52,10 @@
     (swap! state #(assoc % :queues (dissoc (:queues %) queue)))))
 
 (defn add-subscriber! [queue group subscriber-stream]
+  (when-not (get-in @state [:queues queue :groups group])
+    (swap!
+     state
+     #(assoc-in % [:queues queue :groups group] {:members [] :next 0})))
   (swap!
    state
    #(assoc-in % [:queues queue :groups group]
@@ -62,17 +66,18 @@
   (let [subscription (bus/subscribe (:bus @state) queue)]
      (swap! state #(assoc-in % [:queues queue]
                           {:subscription subscription
-                           :groups {group {:members []
-                                           :next 0}}}))
+                           :groups {}}))
      (s/consume
-      (fn [msg] (send-out-message! queue group msg))
+      (fn [msg]
+        (doseq [group (keys (get-in @state [:queues queue :groups]))]
+         (send-out-message! queue group msg)))
       subscription)))
 
 (defn subscribe-group [queue group]
   (when-not (get-in @state [:queues queue])
     (add-queue-subscription! queue group))
   (let [queue-stream (get-in @state [:queues queue :subscription])
-        subscriber-stream (s/stream)]
+        subscriber-stream (s/stream 200)]
     (s/on-closed
      subscriber-stream
      #(remove-subscriber! queue group subscriber-stream queue-stream))

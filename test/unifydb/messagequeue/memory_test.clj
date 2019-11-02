@@ -28,8 +28,16 @@
           sub1 (q/subscribe memq :testq :group1)
           sub2 (q/subscribe memq :testq :group2)
           sub3 (q/subscribe memq :testq :group3)
-          results (atom [])]
-      (doseq [sub [sub1 sub2 sub3]]
-        (s/consume (fn [msg] (swap! results #(conj % msg))) sub))
+          sub3a (q/subscribe memq :testq :group3)]
       (q/publish memq :testq "message1")
-      (is (= @results ["message1"])))))
+      (is (= "message1" (deref (s/take! sub1) 5 :failed)))
+      (is (= "message1" (deref (s/take! sub2) 5 :failed)))
+      (is (= "message1" (deref (s/take! sub3) 5 :failed)))
+      (is (= :failed (deref (s/take! sub3a) 5 :failed)))))
+  (testing "Subscriber cleanup"
+    (let [memq {:type :memory}
+          sub1 (q/subscribe memq :testq :group1)]
+      (s/close! sub1)
+      (let [sub2 (q/subscribe memq :testq :group1)]
+        (q/publish memq :testq "message")
+        (is (= "message" (deref (s/take! sub2) 5 :failed)))))))
