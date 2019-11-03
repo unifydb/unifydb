@@ -52,40 +52,43 @@
        [e (fact-attribute fact) v tx-id (fact-added? fact)]))
    facts))
 
-(defn do-transaction [conn tx-data]
+(defn do-transaction [storage-backend tx-data]
   "Does all necessary processing of `tx-data` and sends it off to the storage backend."
   (let [with-tx (into tx-data (make-new-tx-facts))
         raw-facts (process-tx-data with-tx)
-        ids (gen-temp-ids (:storage-backend conn) raw-facts)
+        ids (gen-temp-ids storage-backend raw-facts)
         facts (resolve-temp-ids ids raw-facts)
         tx-id (get ids "unifydb.tx")
-        tx-report {:db-after (assoc conn :tx-id tx-id)
+        ;; TODO get rest of conn info in :db-after
+        tx-report {:db-after (assoc {} :tx-id tx-id)
                    :tx-data (vec facts)
                    :tempids ids}]
-    (storage/transact-facts! (:storage-backend conn) facts)
+    (storage/transact-facts! storage-backend facts)
     tx-report))
 
-(defn transact-loop [queue-backend state]
+(defn transact-loop [queue-backend storage-backend state]
   (when-let [message (and
                       (not (s/drained? (:subscription @state)))
                       (deref (s/take! (:subscription @state))))]
-   (let [{:keys [conn tx-data]} message
-         tx-report (do-transaction conn tx-data)]
+   (let [{:keys [tx-data]} message
+         tx-report (do-transaction storage-backend tx-data)]
      (queue/publish queue-backend
                     :transact/results
                     (assoc message :tx-report tx-report))
-     (recur queue-backend state))))
+     (recur queue-backend storage-backend state))))
 
-(defrecord TransactService [queue-backend state]
+(defrecord TransactService [queue-backend storage-backend state]
   service/IService
   (start! [self]
     (let [subscription (queue/subscribe queue-backend :transact)
-          transact-thread (Thread. #(transact-loop queue-backend (:state self)))]
+          transact-thread (Thread. #(transact-loop queue-backend
+                                                   storage-backend
+                                                   (:state self)))]
       (swap! (:state self) #(assoc % :subscription subscription))
       (.start transact-thread)))
   (stop! [self]
     (s/close! (:subscription @state))))
 
-(defn new [queue-backend]
+(defn new [queue-backend storage-backend]
   "Returns a new transact component instance."
-  (->TransactService queue-backend (atom {})))
+  (->TransactService queue-backend storage-backend (atom {})))

@@ -27,7 +27,7 @@
 
 (defonce query-service (atom (query/new queue)))
 
-(defonce transact-service (atom (transact/new queue)))
+(defonce transact-service (atom (transact/new queue storage)))
 
 (defn start-server! []
   (service/start! @server))

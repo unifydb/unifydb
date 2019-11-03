@@ -13,7 +13,7 @@
 
 (defmacro def-transact-test [name [transact-results] & body]
   `(deftest ~name
-     (let [transact-service# (t/new {:type :memory})
+     (let [transact-service# (t/new {:type :memory} {:type :memory})
            ~transact-results (queue/subscribe {:type :memory} :transact/results)]
        (try
          (service/start! transact-service#)
@@ -25,13 +25,12 @@
            (memq/reset-state!))))))
 
 (def-transact-test transact-test [results-stream]
-  (let [conn {:storage-backend {:type :memory}}
-        tx-data [[:unifydb/add "ben" :name "Ben Bitdiddle"]
+  (let [tx-data [[:unifydb/add "ben" :name "Ben Bitdiddle"]
                  [:unifydb/add "ben" :salary 60000]
                  [:unifydb/add "alyssa" :name "Alyssa P. Hacker"]
                  [:unifydb/add "alyssa" :salary 40000]
                  [:unifydb/add "alyssa" :supervisor "ben"]]
-        _ (queue/publish {:type :memory} :transact {:conn conn :tx-data tx-data})
+        _ (queue/publish {:type :memory} :transact {:tx-data tx-data})
         tx-report (:tx-report @(s/take! results-stream))
         tempids (:tempids tx-report)
         facts (:tx-data tx-report)

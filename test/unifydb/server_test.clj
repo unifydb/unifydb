@@ -16,7 +16,7 @@
     (let [~queue-name {:type :memory}
           ~store-name {:type :memory}
           query# (query/new ~queue-name)
-          transact# (transact/new ~queue-name)
+          transact# (transact/new ~queue-name ~store-name)
           server# (server/new ~queue-name ~store-name)
           ~req-fn (fn [request#]
                     (let [app# (server/app (:state server#))
@@ -27,9 +27,7 @@
         (service/start! transact#)
         (service/start! server#)
         (doseq [tx# ~txs]
-          (queue/publish ~queue-name :transact {:conn {:storage-backend ~store-name
-                                                       :queue-backend ~queue-name}
-                                                :tx-data tx#}))
+          (queue/publish ~queue-name :transact {:tx-data tx#}))
         (Thread/sleep 5)  ;; give the transaction time to process
         ~@body
         (finally
@@ -94,9 +92,7 @@
                        (nth v 2))]
       (is (= response {:status 200
                        :headers {"Content-Type" "application/edn"}
-                       :body (pr-str {:db-after {:queue-backend {:type :memory}
-                                                  :storage-backend {:type :memory}
-                                                  :tx-id 3}
+                       :body (pr-str {:db-after {:tx-id 3}
                                        :tx-data [[1 :name "Ben Bitdiddle" 3 true]
                                                  [2 :name "Alyssa P. Hacker" 3 true]
                                                  [2 :supervisor 1 3 true]
@@ -123,9 +119,7 @@
       (is (= response {:status 200
                        :headers {"Content-Type" "application/json"}
                        :body (json/write-str
-                              {":db-after" {":queue-backend" {":type" ":memory"}
-                                            ":storage-backend" {":type" ":memory"}
-                                            ":tx-id" 6}
+                              {":db-after" {":tx-id" 6}
                                ":tx-data" [[4 ":name" "Ben Bitdiddle" 6 true]
                                            [5 ":name" "Alyssa P. Hacker" 6 true]
                                            [5 ":supervisor" 4 6 true]
