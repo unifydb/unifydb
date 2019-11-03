@@ -1,6 +1,7 @@
 (ns unifydb.transact
   (:require [clojure.core.match :refer [match]]
             [clojure.tools.logging :as log]
+            [manifold.deferred :as d]
             [manifold.stream :as s]
             [unifydb.facts :refer [fact-entity
                                    fact-attribute
@@ -10,7 +11,8 @@
             [unifydb.messagequeue :as queue]
             [unifydb.service :as service]
             [unifydb.storage :as storage]
-            [unifydb.util :as util]))
+            [unifydb.util :as util])
+  (:import [java.util UUID]))
 
 (defn make-new-tx-facts []
   "Returns the list of database operations to make a new transaction entity."
@@ -92,3 +94,16 @@
 (defn new [queue-backend storage-backend]
   "Returns a new transact component instance."
   (->TransactService queue-backend storage-backend (atom {})))
+
+(defn transact [queue-backend tx-data]
+  "Transacts `tx-data` into the DB via `queue-backend`.
+   Returns a Manifold deferred containing the tx-report."
+  (let [id (str (UUID/randomUUID))
+        results (queue/subscribe queue-backend :transact/results)]
+    (queue/publish queue-backend :transact {:id id :tx-data tx-data})
+    (as-> results v
+      (s/filter #(= (:id %) id) v)
+      (s/take! v)
+      (d/chain v
+               :tx-report
+               #(do (s/close! results) %)))))

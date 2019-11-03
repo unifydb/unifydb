@@ -11,27 +11,24 @@
             [unifydb.storage.memory :as memdb]
             [unifydb.transact :as t]))
 
-(defmacro def-transact-test [name [transact-results] & body]
+(defmacro def-transact-test [name & body]
   `(deftest ~name
-     (let [transact-service# (t/new {:type :memory} {:type :memory})
-           ~transact-results (queue/subscribe {:type :memory} :transact/results)]
+     (let [transact-service# (t/new {:type :memory} {:type :memory})]
        (try
          (service/start! transact-service#)
          ~@body
          (finally
            (service/stop! transact-service#)
-           (s/close! ~transact-results)
            (memdb/empty-store!)
            (memq/reset-state!))))))
 
-(def-transact-test transact-test [results-stream]
+(def-transact-test transact-test
   (let [tx-data [[:unifydb/add "ben" :name "Ben Bitdiddle"]
                  [:unifydb/add "ben" :salary 60000]
                  [:unifydb/add "alyssa" :name "Alyssa P. Hacker"]
                  [:unifydb/add "alyssa" :salary 40000]
                  [:unifydb/add "alyssa" :supervisor "ben"]]
-        _ (queue/publish {:type :memory} :transact {:tx-data tx-data})
-        tx-report (:tx-report @(s/take! results-stream))
+        tx-report @(t/transact {:type :memory} tx-data)
         tempids (:tempids tx-report)
         facts (:tx-data tx-report)
         db-after (:db-after tx-report)]
