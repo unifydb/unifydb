@@ -250,6 +250,9 @@
        (assoc msg :results)
        (queue/publish queue-backend :query/results)))
 
+;; TODO refactor this to not use make-service. Also pass queue-backend
+;; and storage-backend in at the service level instead of in the queue messages
+
 (defn new [queue-backend]
   (service/make-service
    queue-backend
