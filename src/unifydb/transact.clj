@@ -79,6 +79,8 @@
                     (assoc message :tx-report tx-report))
      (recur queue-backend storage-backend state))))
 
+;; TODO add check to make sure there is only ever one transact service running
+
 (defrecord TransactService [queue-backend storage-backend state]
   service/IService
   (start! [self]
