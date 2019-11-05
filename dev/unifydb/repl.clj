@@ -25,7 +25,7 @@
 
 (defonce server (atom (server/new queue storage)))
 
-(defonce query-service (atom (query/new queue)))
+(defonce query-service (atom (query/new queue storage)))
 
 (defonce transact-service (atom (transact/new queue storage)))
 
@@ -78,8 +78,6 @@
 
 (defn transact! [tx-data]
   "Publishes a new transaction to the queue"
-  ;; TODO storage and queue arent' serializable...
-  ;;   will be a problem with non-in-memory queue backends
   (publish queue :transact {:conn {:storage-backend storage
                                     :queue-backend queue}
                              :tx-data tx-data}))

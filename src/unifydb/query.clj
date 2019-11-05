@@ -233,7 +233,7 @@
          [:and ~@(map process-clause (rest rule))]]))
    rules))
 
-(defn query [db q]
+(defn do-query [db q]
   "Runs the query `q` against `db`, returning a seq of
    frames with variables bindings."
   (let [{:keys [find where rules]} q
@@ -245,17 +245,43 @@
           (fn [frame]
             (vec (binding/instantiate frame processed-find (fn [v f] v))))))))
 
-(defn query-callback [queue-backend msg]
-  (->> (query (:db msg) (:query msg))
-       (assoc msg :results)
-       (queue/publish queue-backend :query/results)))
+(defn query-callback [queue-backend storage-backend msg]
+  (let [db (-> (:db msg)
+               (assoc :queue-backend queue-backend)
+               (assoc :storage-backend storage-backend))]
+   (->> (do-query db (:query msg))
+        (assoc msg :results)
+        (queue/publish queue-backend :query/results))))
 
-;; TODO refactor this to not use make-service. Also pass queue-backend
-;; and storage-backend in at the service level instead of in the queue messages
+(defrecord QueryService [queue-backend storage-backend state]
+  service/IService
+  (start! [self]
+    (let [query-sub (queue/subscribe queue-backend :query :query/queryers)
+          match-sub (queue/subscribe queue-backend :query/match :query/matchers)]
+      (swap! (:state self) #(assoc % :query-sub query-sub))
+      (swap! (:state self) #(assoc % :match-sub match-sub))
+      (s/consume
+       (partial #'query-callback queue-backend storage-backend)
+       query-sub)
+      (s/consume
+       (partial #'match-callback queue-backend)
+       match-sub)))
+  (stop! [self]
+    (s/close! (:query-sub @(:state self)))
+    (s/close! (:match-sub @(:state self)))))
 
-(defn new [queue-backend]
-  (service/make-service
-   queue-backend
-   {:query (partial #'query-callback queue-backend)
-    :query/match (partial #'match-callback queue-backend)}
-   :query/queryers))
+(defn new [queue-backend storage-backend]
+  (->QueryService queue-backend storage-backend (atom {})))
+
+(defn query [queue-backend db q]
+  "Runs the query `q` by submitting it to the query service(s)
+   running on the `queue-backend`. `db` is a map containing
+   the key `tx-id`, designating the point in time against which
+   to run the query. Returns a Manifold deferred with the query results."
+  (let [results (queue/subscribe queue-backend :query/results)
+        id (str (UUID/randomUUID))]
+    (queue/publish queue-backend :query {:id id :db db :query q})
+    (as-> results v
+      (s/filter #(= (:id %) id) v)
+      (s/take! v)
+      (d/chain v :results #(do (s/close! results) %)))))

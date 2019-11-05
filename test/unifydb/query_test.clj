@@ -12,7 +12,7 @@
      (let [facts# ~facts
            ~storage-backend (-> {:type :memory} (store/transact-facts! facts#))
            ~queue-backend {:type :memory}
-           query-service# (query/new ~queue-backend)]
+           query-service# (query/new ~queue-backend ~storage-backend)]
        (try
          (service/start! query-service#)
          ~@body
@@ -33,10 +33,8 @@
    [2 :address [:cambridge [:mass :ave] 78] 2 true]
    [2 :address [:cambridge [:mass :ave] 78] 3 false]
    [3 :address [:slumerville [:davis :square] 42] 4 true]]
-  (let [db-latest {:storage-backend storage-backend
-                   :queue-backend queue-backend
-                   :tx-id 4}
-        db-tx-2 (assoc db-latest :tx-id 2)]
+  (let [db-latest {:tx-id 4}
+        db-tx-2 {:tx-id 2}]
     (doseq [{:keys [query db expected name]}
             [{:query '{:find [?e]
                        :where [[?e :name "Ben Bitdiddle"]]}
@@ -64,7 +62,7 @@
               :db db-latest
               :expected '[[2] [1]]}]]
       (testing (str query)
-        (is (= (query/query db query)
+        (is (= @(query/query queue-backend db query)
                expected))))))
 
 (defquerytest compound-queries [storage-backend queue-backend]
@@ -79,9 +77,7 @@
    [2 :address [:cambridge [:mass :ave] 78] 2 true]
    [2 :address [:cambridge [:mass :ave] 78] 3 false]
    [3 :address [:slumerville [:davis :square] 42] 4 true]]
-  (let [db {:storage-backend storage-backend
-            :queue-backend queue-backend
-            :tx-id 4}]
+  (let [db {:tx-id 4}]
     (doseq [{:keys [query db expected name]}
             [{:query '{:find [?e ?what]
                        :where [[:and
@@ -107,7 +103,7 @@
               :db db
               :expected '[[2 :programmer]]}]]
       (testing (str query)
-        (is (= (query/query db query)
+        (is (= @(query/query queue-backend db query)
                expected))))))
 
 (defquerytest rules [storage-backend queue-backend]
@@ -122,9 +118,7 @@
    [2 :address [:cambridge [:mass :ave] 78] 2 true]
    [2 :address [:cambridge [:mass :ave] 78] 3 false]
    [3 :address [:slumerville [:davis :square] 42] 4 true]]
-  (let [db {:queue-backend queue-backend
-            :storage-backend storage-backend
-            :tx-id 4}]
+  (let [db {:tx-id 4}]
     (doseq [{:keys [query db expected name]}
             [{:query '{:find [?who]
                        :where [(:lives-near ?who 1)]
@@ -136,5 +130,5 @@
               :db db
               :expected '[[3]]}]]
       (testing (str query)
-        (is (= (query/query db query)
+        (is (= @(query/query queue-backend db query)
                expected))))))

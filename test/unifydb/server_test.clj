@@ -15,7 +15,7 @@
   `(deftest ~name
     (let [~queue-name {:type :memory}
           ~store-name {:type :memory}
-          query# (query/new ~queue-name)
+          query# (query/new ~queue-name ~store-name)
           transact# (transact/new ~queue-name ~store-name)
           server# (server/new ~queue-name ~store-name)
           ~req-fn (fn [request#]
