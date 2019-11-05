@@ -7,12 +7,12 @@
             [clojure.test :refer [run-tests]]
             [unifydb.messagequeue :as queue :refer [publish subscribe]]
             [unifydb.messagequeue.memory :as memq]
-            [unifydb.query :as query]
+            [unifydb.query :as query :refer [query]]
             [unifydb.service :as service]
             [unifydb.server :as server]
             [unifydb.storage.memory :as memstore]
             [unifydb.structlog :as log]
-            [unifydb.transact :as transact]))
+            [unifydb.transact :as transact :refer [transact]]))
 
 (log/set-log-formatter! #'log/human-format)
 
@@ -75,27 +75,3 @@
   (restart-query-service!)
   (restart-transact-service!)
   (restart-server!))
-
-(defn transact! [tx-data]
-  "Publishes a new transaction to the queue"
-  (publish queue :transact {:conn {:storage-backend storage
-                                    :queue-backend queue}
-                             :tx-data tx-data}))
-
-(defn make-request [request]
-  (let [app (server/app queue storage)
-        response (promise)
-        respond (fn [r] (deliver response r))
-        raise (fn [e] (throw e))]
-    (app request respond raise)
-    @response))
-
-(defn query [q tx-id]
-  (let [request {:headers {"content-type" "application/edn"
-                           "accept" "application/edn"}
-                 :body (pr-str {:query q
-                                :tx-id tx-id})
-                 :uri "/query"
-                 :request-method :post}
-        response (make-request request)]
-    (edn/read-string (:body response))))
