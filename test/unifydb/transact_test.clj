@@ -28,7 +28,7 @@
                  [:unifydb/add "alyssa" :name "Alyssa P. Hacker"]
                  [:unifydb/add "alyssa" :salary 40000]
                  [:unifydb/add "alyssa" :supervisor "ben"]]
-        tx-report @(t/transact {:type :memory} tx-data)
+        tx-report (:tx-report @(t/transact {:type :memory} tx-data))
         tempids (:tempids tx-report)
         facts (:tx-data tx-report)
         db-after (:db-after tx-report)]

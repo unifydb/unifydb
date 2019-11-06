@@ -9,8 +9,10 @@
             [manifold.stream :as s]
             [ring.util.request :as request]
             [unifydb.messagequeue :as queue]
+            [unifydb.query :as query]
             [unifydb.service :as service]
-            [unifydb.structlog :as log])
+            [unifydb.structlog :as log]
+            [unifydb.transact :as transact])
   (:import [java.util UUID]))
 
 (defn edn->json [edn-data]
@@ -53,47 +55,27 @@
                                json-data))
     :else json-data))
 
-(defn query [queue-backend storage-backend]
+(defn query [queue-backend]
   (fn [request]
     (let [query-data (:query (:body request))
-          id (str (UUID/randomUUID))
-          query-msg {:db {:queue-backend queue-backend
-                          :storage-backend storage-backend
-                          :tx-id (:tx-id (:body request))}
-                     :query query-data
-                     :id id}
-          query-results (queue/subscribe queue-backend :query/results)]
-      (queue/publish queue-backend :query query-msg)
-      (as-> query-results v
-           (s/filter #(= (:id %) id) v)
-           (s/take! v)
-           (d/chain v
-                    :results
-                    #(assoc {} :body %))
-           (d/chain v #(do (s/close! query-results) %))))))
+          db {:tx-id (:tx-id (:body request))}
+          query-results (query/query queue-backend db query-data)]
+      (d/chain query-results
+               :results
+               #(assoc {} :body %)))))
 
-(defn transact [queue-backend storage-backend]
+(defn transact [queue-backend]
   (fn [request]
     (let [tx-data (:tx-data (:body request))
-          id (str (UUID/randomUUID))
-          tx-msg {:conn {:queue-backend queue-backend
-                         :storage-backend storage-backend}
-                  :tx-data tx-data
-                  :id id}
-          tx-results (queue/subscribe queue-backend :transact/results)]
-      (queue/publish queue-backend :transact tx-msg)
-      (as-> tx-results v
-        (s/filter #(= (:id %) id) v)
-        (s/take! v)
-        (d/chain v
-                 :tx-report
-                 #(assoc {} :body %))
-        (d/chain v #(do (s/close! tx-results) %))))))
+          tx-result (transact/transact queue-backend tx-data)]
+      (d/chain tx-result
+               :tx-report
+               #(assoc {} :body %)))))
 
-(defn routes [queue-backend storage-backend]
+(defn routes [queue-backend]
   (compojure/routes
-   (POST "/query" request (query queue-backend storage-backend))
-   (POST "/transact" request (transact queue-backend storage-backend))
+   (POST "/query" request (query queue-backend))
+   (POST "/transact" request (transact queue-backend))
    (route/not-found
     {:body {:message "These aren't the droids you're looking for."}})))
 
@@ -143,8 +125,8 @@
            response))))))
 
 (defn app [state]
-  (let [{:keys [queue-backend storage-backend]} @state]
-   (-> (routes queue-backend storage-backend)
+  (let [{:keys [queue-backend]} @state]
+   (-> (routes queue-backend)
        (wrap-logging)
        (wrap-content-type)
        (wrap-accept-type))))

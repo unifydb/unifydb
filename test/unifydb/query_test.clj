@@ -62,7 +62,7 @@
               :db db-latest
               :expected '[[2] [1]]}]]
       (testing (str query)
-        (is (= @(query/query queue-backend db query)
+        (is (= (:results @(query/query queue-backend db query))
                expected))))))
 
 (defquerytest compound-queries [storage-backend queue-backend]
@@ -103,7 +103,7 @@
               :db db
               :expected '[[2 :programmer]]}]]
       (testing (str query)
-        (is (= @(query/query queue-backend db query)
+        (is (= (:results @(query/query queue-backend db query))
                expected))))))
 
 (defquerytest rules [storage-backend queue-backend]
@@ -130,5 +130,5 @@
               :db db
               :expected '[[3]]}]]
       (testing (str query)
-        (is (= @(query/query queue-backend db query)
+        (is (= (:results @(query/query queue-backend db query))
                expected))))))

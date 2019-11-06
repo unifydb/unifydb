@@ -107,5 +107,5 @@
       (s/filter #(= (:id %) id) v)
       (s/take! v)
       (d/chain v
-               :tx-report
+               #(assoc {} :tx-report (:tx-report %))
                #(do (s/close! results) %)))))
