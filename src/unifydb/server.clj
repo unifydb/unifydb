@@ -8,11 +8,12 @@
             [manifold.deferred :as d]
             [manifold.stream :as s]
             [ring.util.request :as request]
+            [taoensso.timbre :as log]
             [unifydb.messagequeue :as queue]
             [unifydb.query :as query]
             [unifydb.service :as service]
-            [unifydb.structlog :as log]
-            [unifydb.transact :as transact])
+            [unifydb.transact :as transact]
+            [unifydb.util :as util])
   (:import [java.util UUID]))
 
 (defn edn->json [edn-data]
@@ -59,7 +60,7 @@
   (fn [request]
     (let [query-data (:query (:body request))
           db {:tx-id (:tx-id (:body request))}
-          query-results (query/query queue-backend db query-data)]
+          query-results (util/query queue-backend db query-data)]
       (d/chain query-results
                :results
                #(assoc {} :body %)))))

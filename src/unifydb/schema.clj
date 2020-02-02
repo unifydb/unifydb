@@ -1,33 +1,29 @@
 (ns unifydb.schema
   (:require [manifold.deferred :as d]
-            [unifydb.query :as query]))
+            [unifydb.util :as util]))
 
-(defn join [facts]
-  "Takes a list of entity-attribute-value tuples
-   and returns a list of maps, where each map represents
-   all the facts about a particular entity."
-  (reduce
-   (fn [acc v]
-     (assoc-in acc [(first v) (second v)] (nth v 2)))
-   {}
-   facts))
+(defn make-schema-query [attrs]
+  "Returns the query to get the schema facts of `attrs`."
+  {:find '[?schema ?attr ?val]
+   :where `[[:or
+             ~@(map
+                (fn [attr]
+                  [:and ['?e :unifydb/schema attr]
+                   ['?e :unifydb/schema '?schema]
+                   ['?e '?attr '?val]])
+                attrs)]]})
 
 ;; TODO add caching to this
 
-(defn get-schemas [queue-backend attrs tx-id]
+(defn get-schemas [queue-backend tx-id attrs]
   "Retrieves the schema entities, if any,
    of `attrs` as of `tx-id`. Returns a
    Manifold deferred of a seq of map,
    where each map is a single schema entity."
-  (->
-   (query/query queue-backend
+  (if (empty? attrs)
+    (d/future [])
+   (->
+    (util/query queue-backend
                 {:tx-id tx-id}
-                {:find '[?schema ?attr ?val]
-                 :where `[[:or
-                           ~@(map
-                              (fn [attr]
-                                [:and ['?e :unifydb/schema attr]
-                                      ['?e :unifydb/schema '?schema]
-                                      ['?e '?attr '?val]])
-                              attrs)]]})
-   (d/chain :results #'join)))
+                (make-schema-query attrs))
+    (d/chain :results #'util/join))))

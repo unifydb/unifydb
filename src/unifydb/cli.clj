@@ -2,15 +2,16 @@
   (:require [clojure.edn :as edn]
             [clojure.string :as string]
             [clojure.tools.cli :as cli]
+            [taoensso.timbre :as log]
             [unifydb.query :as query]
             [unifydb.server :as server]
             [unifydb.service :as service]
+            [unifydb.structlog :as structlog]
             [unifydb.transact :as transact]
             ;; The backend implementations are imported to register their multimethods.
             ;; It would be nice if there was a way to set things up so this isn't necessary...
             [unifydb.messagequeue.memory]
-            [unifydb.storage.memory]
-            [unifydb.structlog :as log])
+            [unifydb.storage.memory])
   (:import [java.io FileNotFoundException]))
 
 (def default-config
@@ -92,7 +93,7 @@
               (service/stop! service))))))
     ;; Main loop
     (while true)))
-      
+
 
 (defn start [config & args]
   "Start one or more of the core UnifyDB services."
@@ -126,10 +127,10 @@
       (= "start" subcmd) (apply start config subcmd-args)
       (= "help" subcmd) (apply help config subcmd-args)
       :else {:exit-message (unifydb-usage (:summary opts))})))
-                                          
+
 
 (defn -main [& args]
+  (structlog/init!)
   (let [{:keys [exit-message ok?]} (apply unifydb args)]
     (when exit-message (println exit-message))
     (System/exit (if ok? 0 1))))
-  

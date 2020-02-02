@@ -5,16 +5,19 @@
             [clojure.repl :refer :all]
             [clojure.pprint :refer [pprint]]
             [clojure.test :refer [run-tests]]
+            [taoensso.timbre :as log]
             [unifydb.messagequeue :as queue :refer [publish subscribe]]
             [unifydb.messagequeue.memory :as memq]
-            [unifydb.query :as query :refer [query]]
+            [unifydb.query :as query]
             [unifydb.service :as service]
             [unifydb.server :as server]
             [unifydb.storage.memory :as memstore]
-            [unifydb.structlog :as log]
-            [unifydb.transact :as transact :refer [transact]]))
+            [unifydb.structlog :as structlog]
+            [unifydb.transact :as transact :refer [transact]]
+            [unifydb.util :refer [query]]))
 
-(log/set-log-formatter! #'log/human-format)
+(structlog/init!)
+(structlog/set-log-formatter! #'structlog/human-format)
 
 (defn run-all-tests []
   (test-runner/test {}))

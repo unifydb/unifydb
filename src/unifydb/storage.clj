@@ -1,4 +1,5 @@
-(ns unifydb.storage)
+(ns unifydb.storage
+  (:require [taoensso.timbre :as log]))
 
 (defmulti transact-facts-impl! (fn [store facts] (:type store)))
 
@@ -15,6 +16,7 @@
    denoted by `tx-id` that might unify with `query` from
    the `store` given the bindings in `frame`. Does not return
    facts that have been retracted."
+  (log/debug "Fetching facts" :store store :query query)
   (fetch-facts-impl store query tx-id frame))
 
 (defn get-next-id [store]

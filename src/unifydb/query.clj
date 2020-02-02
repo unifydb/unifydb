@@ -3,21 +3,24 @@
   (:require [clojure.core.match :refer [match]]
             [manifold.deferred :as d]
             [manifold.stream :as s]
+            [taoensso.timbre :as log]
             [unifydb.binding :as binding :refer [var? var-name]]
             [unifydb.facts :refer [fact-entity fact-attribute fact-value fact-added?]]
             [unifydb.messagequeue :as queue]
             [unifydb.rules :refer [rule-body rule-conclusion]]
+            [unifydb.schema :as schema]
             [unifydb.service :as service]
             [unifydb.storage :as store]
             [unifydb.unify :as unify]
             [unifydb.util :as util :refer [when-let* take-n!]])
   (:import [java.util UUID]))
 
-(declare qeval)
+(declare qeval do-query)
 
 (defn conjoin [db conjuncts rules frames]
   "Evaluates the conjunction (logical AND) of all `conjuncts` in the context of `frames`.
    Returns a seq of frames."
+  (log/debug "Executing conjoin" :conjuncts conjuncts :rules rules :frames frames)
   (if (empty? conjuncts)
     frames
     (conjoin db
@@ -28,6 +31,7 @@
 (defn disjoin [db disjuncts rules frames]
   "Evaluates the disjunctions (logical OR) of all `disjuncts` in the context of `frames`.
    Returns a seq of frames."
+  (log/debug "Executing disjoin" :disjuncts disjuncts :rules rules :frames frames)
   (if (empty? disjuncts)
     []
     (concat (qeval db (first disjuncts) rules frames)
@@ -39,14 +43,15 @@
 ;; there are entities in the database whose :name is not "Foo". To get this to work
 ;; right you'd need to do [:and [?e ?a ?v] [:not [?e :name "Foo"]]] - in other words,
 ;; generating a stream of every fact in the database and then passing it through the
-;; :not filter. This is an acceptable solution for now but it should be clearly documented
-;; and hopefully one day improved.
+;; :not filter. This is an acceptable solution for now but it should be clearly
+;; documented and hopefully one day improved.
 ;;
 ;; See also: https://en.wikipedia.org/wiki/Negation_as_failure
 ;;           https://en.wikipedia.org/wiki/Closed-world_assumption
 (defn negate [db negatee rules frames]
   "Evaluates the `negatee` in the context of `frames`, returning a seq of only
    those frames for which evaluation fails (i.e. for which the logic query cannot be made true)."
+  (log/debug "Executing negate" :negatee negatee :rules rules :frames frames)
   (mapcat
    (fn [frame]
      (if (empty? (qeval db negatee rules [frame]))
@@ -73,53 +78,73 @@
             (compare f1 f2)
             (- (hash f1) (hash f2)))))
 
-(defn process-facts [facts]
-  "Filters out any facts that have been retracted."
-  (let [grouped (group-by
-                 (juxt fact-entity fact-attribute fact-value)
-                 facts)]
-    (filter #(not (nil? %))
-     (map
-      (fn [fact-versions]
-        (let [most-recent (first (reverse (sort cmp-fact-versions fact-versions)))]
-          (when (fact-added? most-recent) most-recent)))
-      (vals grouped)))))
+(defn filter-sorted-facts [acc sorted-facts]
+  "Filters out facts that have been retracted."
+  (if (empty? sorted-facts)
+    acc
+    (if (and (not (fact-added? (first sorted-facts)))
+             (and (= (fact-attribute (first sorted-facts))
+                     (fact-attribute (second sorted-facts)))
+                  (fact-added? (second sorted-facts))))
+      (recur acc (rest (rest sorted-facts)))
+      (recur (if (fact-added? (first sorted-facts))
+               (conj acc (first sorted-facts))
+               acc)
+             (rest sorted-facts)))))
 
-(defn match-fact [query frame fact]
-  (let [match-result (unify/unify-match query fact frame)]
-    (if (= match-result :failed)
-      nil
-      match-result)))
-
-(defn match-callback [queue-backend message]
-  (let [{:keys [match-id query frame fact]} message
-        match-result (match-fact query frame fact)]
-    (queue/publish queue-backend :query/match-results {:match-id match-id
-                                                       :result match-result})))
+(defn process-facts [db facts]
+  "Filters out any facts that have been retracted and
+   handles attribute cardinality."
+  (if (empty? facts)
+    []
+    (let [_ (log/debug "Processing facts" :facts facts :db db)
+          grouped (group-by
+                   (juxt fact-entity fact-attribute)
+                   facts)
+          attrs (into #{} (map #'fact-attribute facts))
+          schemas (-> (do-query db
+                                (schema/make-schema-query attrs))
+                      (util/join))
+          cardinalities
+          (reduce (fn [acc attr]
+                    (if-let [cardinality
+                             (get-in schemas [attr :unifydb/cardinality])]
+                      (assoc acc attr cardinality)
+                      acc))
+                  {}
+                  (keys schemas))]
+      (mapcat
+       (fn [attr-group]
+         (let [filtered-facts (filter-sorted-facts
+                               []
+                               (reverse
+                                (sort cmp-fact-versions attr-group)))
+               cardinality (get cardinalities
+                                (fact-attribute (first attr-group)))]
+           (if (= cardinality :cardinality/many)
+             filtered-facts
+             (take 1 filtered-facts))))
+       (vals grouped)))))
 
 (defn match-facts [db query frame]
   "Returns a seq of frames obtained by pattern-matching the `query`
-   against the facts in `db` in the context of `frame`.
-
-   The pattern-matching is done in parallel via the queue backend."
-  (let [facts (process-facts
-               (store/fetch-facts (:storage-backend db)
-                                  query
-                                  (:tx-id db)
-                                  frame))
-        match-id (UUID/randomUUID)
-        match-results (queue/subscribe (:queue-backend db) :query/match-results :query/matchers)]
-    (doseq [fact facts]
-      (queue/publish (:queue-backend db) :query/match {:match-id match-id
-                                                       :query query
-                                                       :frame frame
-                                                       :fact fact}))
-    (->> match-results
-         (s/filter #(= match-id (:match-id %)))
-         (take-n! (count facts))
-         (map :result)
-         (filter #(not (nil? %)))
-         (#(do (s/close! match-results) %)))))
+   against the facts in `db` in the context of `frame`."
+  (let [facts (log/spy
+               :debug :processed-facts
+               (process-facts
+                db
+                (log/spy :debug :facts
+                         (store/fetch-facts (:storage-backend db)
+                                            query
+                                            (:tx-id db)
+                                            frame))))]
+    (log/spy
+     :debug :match-results
+     (filter
+      #(not= :failed %)
+      (map
+       #(unify/unify-match query % frame)
+       facts)))))
 
 (defn rename-vars [rule]
   "Gives all the variables in the rule globally unique names
@@ -143,6 +168,7 @@
     (rename-vars rule)))
 
 (defn apply-rule [db query rules rule frame]
+  (log/debug "Applying rule" :query query :rule rule :rules rules :frame frame)
   (let [clean-rule (rename-vars rule)
         unify-result (unify/unify-match query
                                         (rule-conclusion clean-rule)
@@ -159,6 +185,7 @@
 
 (defn simple-query [db query rules frames]
   "Evaluates a non-compound query, returning a seq of frames."
+  (log/debug "Executing simple query" :query query :rules rules :frames frames)
   (mapcat
    (fn [frame]
      (concat (match-facts db query frame)
@@ -168,13 +195,15 @@
 (defn qeval [db query rules frames]
   "Evaluates a logic query given by `query` in the context of `frames`.
    Returns a seq of frames."
-  (match (vec query)
-         [:and & conjuncts] (conjoin db conjuncts rules frames)
-         [:or & disjuncts] (disjoin db disjuncts rules frames)
-         [:not negatee] (negate db negatee rules frames)
-         ;; TODO support lisp-value?
-         [:always-true] frames
-         _ (simple-query db query rules frames)))
+  (log/debug "Evaluating query" :query query :rules rules :frames frames)
+  (log/spy :debug :query-results
+   (match (vec query)
+          [:and & conjuncts] (conjoin db conjuncts rules frames)
+          [:or & disjuncts] (disjoin db disjuncts rules frames)
+          [:not negatee] (negate db negatee rules frames)
+          ;; TODO support lisp-value?
+          [:always-true] frames
+          _ (simple-query db query rules frames))))
 
 ;; A query is a map with the following structure:
 ;;    {:find [?user ?tweet]
@@ -249,41 +278,21 @@
   (let [db (-> (:db msg)
                (assoc :queue-backend queue-backend)
                (assoc :storage-backend storage-backend))]
-   (->> (do-query db (:query msg))
-        (assoc msg :results)
-        (queue/publish queue-backend :query/results))))
+    (log/debug "Received query message" :message msg)
+    (->> (do-query db (:query msg))
+         (assoc msg :results)
+         (queue/publish queue-backend :query/results))))
 
 (defrecord QueryService [queue-backend storage-backend state]
   service/IService
   (start! [self]
-    (let [query-sub (queue/subscribe queue-backend :query :query/queryers)
-          match-sub (queue/subscribe queue-backend :query/match :query/matchers)]
+    (let [query-sub (queue/subscribe queue-backend :query :query/queryers)]
       (swap! (:state self) #(assoc % :query-sub query-sub))
-      (swap! (:state self) #(assoc % :match-sub match-sub))
       (s/consume
-       (partial #'query-callback queue-backend storage-backend)
-       query-sub)
-      (s/consume
-       (partial #'match-callback queue-backend)
-       match-sub)))
+       #(query-callback queue-backend storage-backend %)
+       query-sub)))
   (stop! [self]
-    (s/close! (:query-sub @(:state self)))
-    (s/close! (:match-sub @(:state self)))))
+    (s/close! (:query-sub @(:state self)))))
 
 (defn new [queue-backend storage-backend]
   (->QueryService queue-backend storage-backend (atom {})))
-
-(defn query [queue-backend db q]
-  "Runs the query `q` by submitting it to the query service(s)
-   running on the `queue-backend`. `db` is a map containing
-   the key `tx-id`, designating the point in time against which
-   to run the query. Returns a Manifold deferred with the query results."
-  (let [results (queue/subscribe queue-backend :query/results)
-        id (str (UUID/randomUUID))]
-    (queue/publish queue-backend :query {:id id :db db :query q})
-    (as-> results v
-      (s/filter #(= (:id %) id) v)
-      (s/take! v)
-      (d/chain v
-               #(assoc {} :results (:results %))
-               #(do (s/close! results) %)))))

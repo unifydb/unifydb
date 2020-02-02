@@ -5,7 +5,8 @@
             [unifydb.query :as query]
             [unifydb.service :as service]
             [unifydb.storage :as store]
-            [unifydb.storage.memory :as memstore]))
+            [unifydb.storage.memory :as memstore]
+            [unifydb.util :as util]))
 
 (defmacro defquerytest [name [storage-backend queue-backend] facts & body]
   `(deftest ~name
@@ -62,7 +63,7 @@
               :db db-latest
               :expected '[[2] [1]]}]]
       (testing (str query)
-        (is (= (:results @(query/query queue-backend db query))
+        (is (= (:results @(util/query queue-backend db query))
                expected))))))
 
 (defquerytest compound-queries [storage-backend queue-backend]
@@ -103,7 +104,7 @@
               :db db
               :expected '[[2 :programmer]]}]]
       (testing (str query)
-        (is (= (:results @(query/query queue-backend db query))
+        (is (= (:results @(util/query queue-backend db query))
                expected))))))
 
 (defquerytest rules [storage-backend queue-backend]
@@ -130,5 +131,29 @@
               :db db
               :expected '[[3]]}]]
       (testing (str query)
-        (is (= (:results @(query/query queue-backend db query))
+        (is (= (:results @(util/query queue-backend db query))
                expected))))))
+
+(defquerytest cardinality [storage-backend queue-backend]
+  [[1 :unifydb/schema :favorite-colors 0 true]
+   [1 :unifydb/cardinality :cardinality/many 0 true]
+   [2 :name "Bob" 0 true]
+   [2 :favorite-colors "red" 0 true]
+   [2 :favorite-colors "green" 0 true]
+   [2 :favorite-colors "blue" 0 true]
+   [2 :favorite-colors "blue" 1 false]
+   [3 :name "Emily" 2 true]
+   [3 :favorite-colors "yellow" 2 true]
+   [4 :name "Joe" 3 true]
+   [4 :lucky-number 7 3 true]
+   [4 :lucky-number 9 4 true]
+   [4 :lucky-number 9 5 false]]
+  (testing "Cardinality many"
+    (is (= [[2 "red"]
+            [2 "green"]
+            [3 "yellow"]]
+           (:results @(util/query queue-backend
+                                  {:tx-id 5}
+                                  '{:find [?ent ?color]
+                                    :where [[?ent :favorite-colors ?color]]})))))
+  (testing "Cardinality one double-assertion"))

@@ -30,7 +30,7 @@
                   [:unifydb/add "bar" :unifydb/schema :bar]
                   [:unifydb/add "bar" :unifydb/unique :unique/upsert]]]
      @(transact/transact {:type :memory} tx-data)
-     (is (= @(schema/get-schemas {:type :memory} [:foo :bar :baz] 3)
+     (is (= @(schema/get-schemas {:type :memory} 3 [:foo :bar :baz])
             {:foo {:unifydb/cardinality :cardinality/many
                    :unifydb/schema :foo}
              :bar {:unifydb/unique :unique/upsert

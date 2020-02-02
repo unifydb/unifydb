@@ -1,81 +1,90 @@
 (ns unifydb.structlog
   (:require [clojure.data.json :as json]
             [clojure.string :as string]
-            [clojure.tools.logging :as log]
-            [clj-logging-config.log4j :as logconfig]))
-
-;; TODO add support for logging throwables
-;; TODO capture exceptions from manifold stream errors and put them into a structured format
+            [clojure.pprint :as pprint]
+            [taoensso.timbre :as timbre]))
 
 ;; TODO read in config from unifyDB config.edn file
-;; TODO instead of hard-coding the logger here support multiple loggers
-(logconfig/set-loggers! :root {:pattern "%m%n"})
 
-;; TODO a much more elegant formatter system would work like Ring,
-;; where the log object is passed through a stack of middlewares
-;; that manipulate the object and finally logs the end result.
-;; Another helpful feature would be being able to "bind" certain
-;; values to a logger so that e.g. every log gets a request id on it
-;; automatically.
+(defn args->data-map [vargs]
+  "Transforms raw vargs from a Timbre log call into a structured map."
+  (apply hash-map vargs))
 
-;; This could look similar to the with-logging-context macro from
-;; https://github.com/malcolmsparks/clj-logging-config#log4j-ndc-and-mdc
+(defn log-map->structlog [log-map]
+  {:ns (:?ns-str log-map)
+   :level (:level log-map)
+   :timestamp (inst-ms (:instant log-map))
+   :message (first (:vargs log-map))
+   :data (args->data-map (rest (:vargs log-map)))})
 
-(def edn-format pr-str)
+(defn with-err [data-map log-map]
+  (if (:?err log-map)
+    (assoc data-map :error (Throwable->map (:?err log-map)))
+    data-map))
+
+(defn edn-format [log-map]
+  (let [structlog (-> (log-map->structlog log-map)
+                      (with-err log-map))]
+    (pr-str structlog)))
 
 ;; TODO this will blow up if it encounters a data object that isn't json-serializable
-(def json-format json/write-str)
+(defn json-format [log-map]
+  (let [structlog (-> (log-map->structlog log-map)
+                      (with-err log-map))]
+    (json/write-str structlog)))
 
-(defn human-format [msg]
-  (format "%s [%s] - %s %s"
-          (-> msg (:level) (name) (string/upper-case))
-          (:ns msg)
-          (:message msg)
-          (-> msg
-              (:data)
-              (#(reduce
-                 (fn [acc [k v]] (str acc (name k) "=" (pr-str v) " "))
-                 ""
-                 %))
-              (string/trim))))
-
-(def state (atom {:formatter edn-format}))
+(defn human-format [log-map]
+  (let [fmtd
+        (format "%s [%s] - %s %s"
+                (->> log-map
+                     (:level)
+                     (name)
+                     (string/upper-case)
+                     (timbre/color-str
+                      (condp = (:level log-map)
+                        :debug :blue
+                        :warn :yellow
+                        :error :red
+                        :fatal :red
+                        :green)))
+                (:?ns-str log-map)
+                (first (:vargs log-map))
+                (->> log-map
+                     (:vargs)
+                     (rest)
+                     (partition 2)
+                     (#(reduce
+                        (fn [acc [k v]] (str acc
+                                             (timbre/color-str :blue (name k))
+                                             "="
+                                             (timbre/color-str :purple (pr-str v))
+                                             " "))
+                        ""
+                        %))
+                     (string/trim)))]
+    (if (:?err log-map)
+      (format "%s\n%s"
+              fmtd
+              (timbre/stacktrace (:?err log-map)))
+      fmtd)))
 
 (defn set-log-formatter! [formatter]
-  (swap! state #(assoc % :formatter formatter)))
+  (timbre/merge-config!
+   {:output-fn formatter}))
 
-(defn set-log-level! [level]
-  (logconfig/set-loggers! :root {:level level}))
 
-(defn log* [level data]
-  (log/log level ((:formatter @state) data)))
 
-(defmacro log [level msg & data]
-  (when-not (= (mod (count data) 2) 0)
-    (throw (IllegalArgumentException. "Expected an even number of data forms")))
-  `(let [ns# ~*ns*
-         data-map# (apply hash-map (list ~@data))
-         log# {:ns (symbol (str ns#))
-               :level ~level
-               :timestamp (.getTime (java.util.Date.))
-               :message ~msg
-               :data data-map#}]
-     (log* ~level log#)))
+(defn transform-spy [log-map]
+  (if (= (second (:vargs log-map)) "=>")
+    (assoc log-map :vargs
+           `["Spied value"
+             ~(first (:vargs log-map))
+             ~@(subvec (:vargs log-map) 2)])
+    log-map))
 
-(defmacro trace [msg & data]
-  `(log :trace ~msg ~@data))
-
-(defmacro debug [msg & data]
-  `(log :debug ~msg ~@data))
-
-(defmacro info [msg & data]
-  `(log :info ~msg ~@data))
-
-(defmacro warn [msg & data]
-  `(log :warn ~msg ~@data))
-
-(defmacro error [msg & data]
-  `(log :error ~msg ~@data))
-
-(defmacro fatal [msg & data]
-  `(log :fatal ~msg ~@data))
+(defn init! []
+  (timbre/merge-config!
+   {:level :info
+    :output-fn #'edn-format
+    :middleware [#'transform-spy]})
+  (timbre/handle-uncaught-jvm-exceptions!))
