@@ -130,7 +130,6 @@
       (= "help" subcmd) (apply help config subcmd-args)
       :else {:exit-message (unifydb-usage (:summary opts))})))
 
-
 (defn -main [& args]
   (structlog/init!)
   (let [{:keys [exit-message ok?]} (apply unifydb args)]

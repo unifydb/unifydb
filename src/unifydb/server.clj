@@ -128,10 +128,10 @@
 
 (defn app [state]
   (let [{:keys [queue-backend]} @state]
-   (-> (routes queue-backend)
-       (wrap-logging)
-       (wrap-content-type)
-       (wrap-accept-type))))
+    (-> (routes queue-backend)
+        (wrap-logging)
+        (wrap-content-type)
+        (wrap-accept-type))))
 
 (defn start-server! [state]
   (let [server (:server @state)

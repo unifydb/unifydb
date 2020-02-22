@@ -22,7 +22,7 @@
           subscription (q/subscribe memq :testq)]
       (doseq [message [:first-message :second-message :third-message]]
         (q/publish memq :testq message))
-      (is (= (take-n! 3 subscription ) [:first-message :second-message :third-message]))))
+      (is (= (take-n! 3 subscription) [:first-message :second-message :third-message]))))
   (testing "Consumer groups"
     (let [memq {:type :memory}
           sub1 (q/subscribe memq :testq :group1)

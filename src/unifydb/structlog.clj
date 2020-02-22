@@ -71,8 +71,6 @@
   (timbre/merge-config!
    {:output-fn formatter}))
 
-
-
 (defn transform-spy [log-map]
   (if (= (second (:vargs log-map)) "=>")
     (assoc log-map :vargs

@@ -22,7 +22,6 @@
             [:name "Widget A" 1 0 true]]))
     (mem/empty-store!)))
 
-
 (deftest test-fetch-facts
   (let [facts [[1 :name "Ben Bitdiddle" 0 true]
                [1 :job [:computer :wizard] 0 true]

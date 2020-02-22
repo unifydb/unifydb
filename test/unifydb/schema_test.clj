@@ -25,13 +25,13 @@
 
 (def-schema-test test-get-schema
   (testing "get-schemas"
-   (let [tx-data [[:unifydb/add "foo" :unifydb/schema :foo]
-                  [:unifydb/add "foo" :unifydb/cardinality :cardinality/many]
-                  [:unifydb/add "bar" :unifydb/schema :bar]
-                  [:unifydb/add "bar" :unifydb/unique :unique/upsert]]]
-     @(transact/transact {:type :memory} tx-data)
-     (is (= @(schema/get-schemas {:type :memory} 3 [:foo :bar :baz])
-            {:foo {:unifydb/cardinality :cardinality/many
-                   :unifydb/schema :foo}
-             :bar {:unifydb/unique :unique/upsert
-                   :unifydb/schema :bar}})))))
+    (let [tx-data [[:unifydb/add "foo" :unifydb/schema :foo]
+                   [:unifydb/add "foo" :unifydb/cardinality :cardinality/many]
+                   [:unifydb/add "bar" :unifydb/schema :bar]
+                   [:unifydb/add "bar" :unifydb/unique :unique/upsert]]]
+      @(transact/transact {:type :memory} tx-data)
+      (is (= @(schema/get-schemas {:type :memory} 3 [:foo :bar :baz])
+             {:foo {:unifydb/cardinality :cardinality/many
+                    :unifydb/schema :foo}
+              :bar {:unifydb/unique :unique/upsert
+                    :unifydb/schema :bar}})))))

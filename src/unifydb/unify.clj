@@ -43,7 +43,6 @@
       (depends-on? val var frame) :failed
       :else (extend-frame frame var val))))
 
-
 (defn unify-match
   "Unifies `pattern1` with `pattern2` by binding variables
    in `frame` such that both patterns could have the same

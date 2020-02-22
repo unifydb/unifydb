@@ -206,13 +206,13 @@
   [db query rules frames]
   (log/debug "Evaluating query" :query query :rules rules :frames frames)
   (log/spy :debug :query-results
-   (match (vec query)
-          [:and & conjuncts] (conjoin db conjuncts rules frames)
-          [:or & disjuncts] (disjoin db disjuncts rules frames)
-          [:not negatee] (negate db negatee rules frames)
+           (match (vec query)
+             [:and & conjuncts] (conjoin db conjuncts rules frames)
+             [:or & disjuncts] (disjoin db disjuncts rules frames)
+             [:not negatee] (negate db negatee rules frames)
           ;; TODO support lisp-value?
-          [:always-true] frames
-          _ (simple-query db query rules frames))))
+             [:always-true] frames
+             _ (simple-query db query rules frames))))
 
 ;; A query is a map with the following structure:
 ;;    {:find [?user ?tweet]
@@ -249,10 +249,10 @@
   "Processes a clause by expanding variables and padding it out to a 5-tuple"
   [clause]
   (match (vec clause)
-         [:and & conjuncts] `[:and ~@(map process-clause conjuncts)]
-         [:or & disjuncts] `[:or ~@(map process-clause disjuncts)]
-         [:not negatee] `[:not ~(process-clause negatee)]
-         _ (-> clause (pad-clause) (expand-question-marks))))
+    [:and & conjuncts] `[:and ~@(map process-clause conjuncts)]
+    [:or & disjuncts] `[:or ~@(map process-clause disjuncts)]
+    [:not negatee] `[:not ~(process-clause negatee)]
+    _ (-> clause (pad-clause) (expand-question-marks))))
 
 (defn process-where
   "Processes a where clause by wrapping the whole clause in an :and

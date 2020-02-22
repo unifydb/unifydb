@@ -28,8 +28,8 @@
   (map
    (fn [tx-stmt]
      (match tx-stmt
-            [:unifydb/add e a v] [e a v "unifydb.tx" true]
-            [:unifydb/retract e a v] [e a v "unifydb.tx" false]))
+       [:unifydb/add e a v] [e a v "unifydb.tx" true]
+       [:unifydb/retract e a v] [e a v "unifydb.tx" false]))
    tx-data))
 
 (defn gen-temp-ids
@@ -77,12 +77,12 @@
   (when-let [message (and
                       (not (s/drained? (:subscription @state)))
                       (deref (s/take! (:subscription @state))))]
-   (let [{:keys [tx-data]} message
-         tx-report (do-transaction storage-backend tx-data)]
-     (queue/publish queue-backend
-                    :transact/results
-                    (assoc message :tx-report tx-report))
-     (recur queue-backend storage-backend state))))
+    (let [{:keys [tx-data]} message
+          tx-report (do-transaction storage-backend tx-data)]
+      (queue/publish queue-backend
+                     :transact/results
+                     (assoc message :tx-report tx-report))
+      (recur queue-backend storage-backend state))))
 
 ;; TODO add check to make sure there is only ever one transact service running
 

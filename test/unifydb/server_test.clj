@@ -13,29 +13,29 @@
 
 (defmacro defservertest [name [req-fn store-name queue-name] txs & body]
   `(deftest ~name
-    (let [~queue-name {:type :memory}
-          ~store-name {:type :memory}
-          query# (query/new ~queue-name ~store-name)
-          transact# (transact/new ~queue-name ~store-name)
-          server# (server/new ~queue-name ~store-name)
-          ~req-fn (fn [request#]
-                    (let [app# (server/app (:state server#))
-                          response# (app# request#)]
-                      @response#))]
-      (try
-        (service/start! query#)
-        (service/start! transact#)
-        (service/start! server#)
-        (doseq [tx# ~txs]
-          (queue/publish ~queue-name :transact {:tx-data tx#}))
-        (Thread/sleep 5)  ;; give the transaction time to process
-        ~@body
-        (finally
-          (memstore/empty-store!)
-          (memq/reset-state!)
-          (service/stop! server#)
-          (service/stop! transact#)
-          (service/stop! query#))))))
+     (let [~queue-name {:type :memory}
+           ~store-name {:type :memory}
+           query# (query/new ~queue-name ~store-name)
+           transact# (transact/new ~queue-name ~store-name)
+           server# (server/new ~queue-name ~store-name)
+           ~req-fn (fn [request#]
+                     (let [app# (server/app (:state server#))
+                           response# (app# request#)]
+                       @response#))]
+       (try
+         (service/start! query#)
+         (service/start! transact#)
+         (service/start! server#)
+         (doseq [tx# ~txs]
+           (queue/publish ~queue-name :transact {:tx-data tx#}))
+         (Thread/sleep 5)  ;; give the transaction time to process
+         ~@body
+         (finally
+           (memstore/empty-store!)
+           (memq/reset-state!)
+           (service/stop! server#)
+           (service/stop! transact#)
+           (service/stop! query#))))))
 (defservertest query-endpoint [make-request store queue-backend]
   '[[[:unifydb/add "ben" :name "Ben Bitdiddle"]
      [:unifydb/add "ben" :job ["computer" "wizard"]]
@@ -53,8 +53,8 @@
                      :body (prn-str
                             {:tx-id 3
                              :query '{:find [?name]
-                                           :where [[?e :job ["computer" _]]
-                                                   [?e :name ?name]]}})})]
+                                      :where [[?e :job ["computer" _]]
+                                              [?e :name ?name]]}})})]
       (is (= response '{:status 200
                         :headers {"Content-Type" "application/edn"}
                         :body "([\"Alyssa P. Hacker\"] [\"Ben Bitdiddle\"])"}))))
@@ -93,13 +93,13 @@
       (is (= response {:status 200
                        :headers {"Content-Type" "application/edn"}
                        :body (pr-str {:db-after {:tx-id 3}
-                                       :tx-data [[1 :name "Ben Bitdiddle" 3 true]
-                                                 [2 :name "Alyssa P. Hacker" 3 true]
-                                                 [2 :supervisor 1 3 true]
-                                                 [3 :unifydb/txInstant tx-instant 3 true]]
-                                       :tempids {"ben" 1
-                                                 "alyssa" 2
-                                                 "unifydb.tx" 3}})}))))
+                                      :tx-data [[1 :name "Ben Bitdiddle" 3 true]
+                                                [2 :name "Alyssa P. Hacker" 3 true]
+                                                [2 :supervisor 1 3 true]
+                                                [3 :unifydb/txInstant tx-instant 3 true]]
+                                      :tempids {"ben" 1
+                                                "alyssa" 2
+                                                "unifydb.tx" 3}})}))))
   (testing "/transact (JSON)"
     (let [response (make-request
                     {:request-method :post
