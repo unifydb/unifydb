@@ -22,45 +22,46 @@
 (defn run-all-tests []
   (test-runner/test {}))
 
-(defonce queue {:type :memory})
+(defn make-state []
+  (let [queue (memq/new)
+        store (memstore/new)]
+    {:queue queue
+     :store store
+     :server (server/new queue store)
+     :query (query/new queue store)
+     :transact (transact/new queue store)}))
 
-(defonce storage {:type :memory})
-
-(defonce server (atom (server/new queue storage)))
-
-(defonce query-service (atom (query/new queue storage)))
-
-(defonce transact-service (atom (transact/new queue storage)))
+(defonce state (atom (make-state)))
 
 (defn start-server! []
-  (service/start! @server))
+  (service/start! (:server @state)))
 
 (defn stop-server! []
-  (service/stop! @server))
+  (service/stop! (:server @state)))
 
 (defn restart-server! []
-  (service/stop! @server)
-  (service/start! @server))
+  (service/stop! (:server @state))
+  (service/start! (:server @state)))
 
 (defn start-query-service! []
-  (service/start! @query-service))
+  (service/start! (:query @state)))
 
 (defn stop-query-service! []
-  (service/stop! @query-service))
+  (service/stop! (:query @state)))
 
 (defn restart-query-service! []
-  (service/stop! @query-service)
-  (service/start! @query-service))
+  (service/stop! (:query @state))
+  (service/start! (:query @state)))
 
 (defn start-transact-service! []
-  (service/start! @transact-service))
+  (service/start! (:transact @state)))
 
 (defn stop-transact-service! []
-  (service/stop! @transact-service))
+  (service/stop! (:transact @state)))
 
 (defn restart-transact-service! []
-  (service/stop! @transact-service)
-  (service/start! @transact-service))
+  (service/stop! (:transact @state))
+  (service/start! (:transact @state)))
 
 (defn start-system! []
   (start-query-service!)
@@ -70,11 +71,9 @@
 (defn stop-system! []
   (stop-query-service!)
   (stop-transact-service!)
-  (stop-server!)
-  (memq/reset-state!))
+  (stop-server!))
 
 (defn restart-system! []
-  (memq/reset-state!)
-  (restart-query-service!)
-  (restart-transact-service!)
-  (restart-server!))
+  (stop-system!)
+  (reset! state (make-state))
+  (start-system!))

@@ -103,7 +103,7 @@
   [db facts]
   (if (empty? facts)
     []
-    (let [_ (log/debug "Processing facts" :facts facts :db db)
+    (let [_ (log/debug "Processing facts" :facts facts)
           grouped (group-by
                    (juxt fact-entity fact-attribute)
                    facts)

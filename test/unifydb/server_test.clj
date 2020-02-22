@@ -13,8 +13,8 @@
 
 (defmacro defservertest [name [req-fn store-name queue-name] txs & body]
   `(deftest ~name
-     (let [~queue-name {:type :memory}
-           ~store-name {:type :memory}
+     (let [~queue-name (memq/new)
+           ~store-name (memstore/new)
            query# (query/new ~queue-name ~store-name)
            transact# (transact/new ~queue-name ~store-name)
            server# (server/new ~queue-name ~store-name)
@@ -31,11 +31,10 @@
          (Thread/sleep 5)  ;; give the transaction time to process
          ~@body
          (finally
-           (memstore/empty-store!)
-           (memq/reset-state!)
            (service/stop! server#)
            (service/stop! transact#)
            (service/stop! query#))))))
+
 (defservertest query-endpoint [make-request store queue-backend]
   '[[[:unifydb/add "ben" :name "Ben Bitdiddle"]
      [:unifydb/add "ben" :job ["computer" "wizard"]]

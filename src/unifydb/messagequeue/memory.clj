@@ -6,13 +6,6 @@
             [unifydb.messagequeue :as q])
   (:import [java.util UUID]))
 
-(defonce state (atom {:bus (bus/event-bus)
-                      :groups {}}))
-
-(defn reset-state! []
-  (reset! state {:bus (bus/event-bus)
-                 :groups {}}))
-
 (defn group-key
   "Returns the keyword that identifies
    the group designated by `queue` and `group-id`
@@ -109,12 +102,18 @@
                       (add-consumer! consumer-stream queue group-id)))
     consumer-stream))
 
-(defmethod q/publish-impl :memory
-  [backend queue message]
-  (bus/publish! (:bus @state) queue message))
-
-(defmethod q/subscribe-impl :memory
-  [backend queue group-id]
-  (if-not group-id
-    (bus/subscribe (:bus @state) queue)
+(defrecord InMemoryMessageQueueBackend [state]
+  q/IMessageQueueBackend
+  (publish [this queue message]
+    (bus/publish! (:bus @(:state this)) queue message))
+  (subscribe [this queue]
+    (bus/subscribe (:bus @(:state this)) queue))
+  (subscribe [this queue group-id]
     (subscribe-in-group! state queue group-id)))
+
+(defn new
+  "Returns a new in-memory message queue backend."
+  []
+  (->InMemoryMessageQueueBackend
+   (atom {:bus (bus/event-bus)
+          :groups {}})))

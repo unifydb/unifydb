@@ -103,8 +103,8 @@
     (map avet->eavt avet-facts)))
 
 (defn fetch-facts-from-index [db query tx-id]
-  (let [eavt @(:eavt db)
-        avet @(:avet db)
+  (let [eavt (:eavt db)
+        avet (:avet db)
         [entity attribute] query]
     (match [entity attribute]
       ;; (? a v), (? a ?)
@@ -114,31 +114,37 @@
       [_ _]
       (fetch-facts-eavt eavt query tx-id))))
 
-(def store
-  (atom {:eavt (atom (set/sorted-set-by cmp-fact-vec))
-         :avet (atom (set/sorted-set-by cmp-fact-vec))
-         :id-counter (atom 0)}))
+(defrecord InMemoryStorageBackend [state]
+  storage/IStorageBackend
+  (transact-facts! [this facts]
+    (let [facts-eavt facts
+          facts-avet (map #(vector (fact-attribute %)
+                                   (fact-value %)
+                                   (fact-entity %)
+                                   (fact-tx-id %)
+                                   (fact-added? %))
+                          facts)]
+      (swap! (:state this)
+             (fn [s]
+               (update s :eavt
+                       #(into % facts-eavt))))
+      (swap! (:state this)
+             (fn [s]
+               (update s :avet
+                       #(into % facts-avet)))))
+    this)
+  (fetch-facts [this query tx-id frame]
+    (let [instantiated (binding/instantiate frame query (fn [v f] v))]
+      (fetch-facts-from-index @(:state this) instantiated tx-id)))
+  (get-next-id [this]
+    (:id-counter
+     (swap! (:state this)
+            #(update % :id-counter inc)))))
 
-(defn empty-store! []
-  (reset! store {:eavt (atom (set/sorted-set-by cmp-fact-vec))
-                 :avet (atom (set/sorted-set-by cmp-fact-vec))
-                 :id-counter (atom 0)}))
-
-(defmethod storage/transact-facts-impl! :memory [connection facts]
-  (let [facts-eavt facts
-        facts-avet (map #(vector (fact-attribute %1)
-                                 (fact-value %1)
-                                 (fact-entity %1)
-                                 (fact-tx-id %1)
-                                 (fact-added? %1))
-                        facts)]
-    (swap! (:eavt @store) #(into %1 facts-eavt))
-    (swap! (:avet @store) #(into %1 facts-avet)))
-  connection)
-
-(defmethod storage/fetch-facts-impl :memory [connection query tx-id frame]
-  (let [instantiated (binding/instantiate frame query (fn [v f] v))]
-    (fetch-facts-from-index @store instantiated tx-id)))
-
-(defmethod storage/get-next-id-impl :memory [connection]
-  (swap! (:id-counter @store) inc))
+(defn new
+  "Returns a new, empty in-memory store."
+  []
+  (->InMemoryStorageBackend
+   (atom {:eavt (set/sorted-set-by cmp-fact-vec)
+          :avet (set/sorted-set-by cmp-fact-vec)
+          :id-counter 0})))

@@ -5,26 +5,15 @@
             [unifydb.messagequeue.memory :as memq]
             [unifydb.util :refer [take-n!]]))
 
-(defmacro defmemqtest [name & body]
-  `(deftest ~name
-     ~@(map
-        (fn [expr]
-          (if (and (sequential? expr) (= (first expr) 'testing))
-            `(try ~expr (finally (memq/reset-state!)))
-            (throw (IllegalArgumentException.
-                    (str "defmemqtest top-level forms must be calls to (testing ...), found: "
-                         (pr-str expr))))))
-        body)))
-
-(defmemqtest memq-test
+(deftest memq-test
   (testing "Pubsub"
-    (let [memq {:type :memory}
+    (let [memq (memq/new)
           subscription (q/subscribe memq :testq)]
       (doseq [message [:first-message :second-message :third-message]]
         (q/publish memq :testq message))
       (is (= (take-n! 3 subscription) [:first-message :second-message :third-message]))))
   (testing "Consumer groups"
-    (let [memq {:type :memory}
+    (let [memq (memq/new)
           sub1 (q/subscribe memq :testq :group1)
           sub2 (q/subscribe memq :testq :group2)
           sub3 (q/subscribe memq :testq :group3)
@@ -36,7 +25,7 @@
                                [sub3 sub3a])]
         (is (= {:failed 1 "message1" 1} (frequencies group-results))))))
   (testing "Subscriber cleanup"
-    (let [memq {:type :memory}
+    (let [memq (memq/new)
           sub1 (q/subscribe memq :testq-cleanup :group1)]
       (s/close! sub1)
       (let [sub2 (q/subscribe memq :testq-cleanup :group1)]

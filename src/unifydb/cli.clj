@@ -8,10 +8,8 @@
             [unifydb.service :as service]
             [unifydb.structlog :as structlog]
             [unifydb.transact :as transact]
-            ;; The backend implementations are imported to register their multimethods.
-            ;; It would be nice if there was a way to set things up so this isn't necessary...
-            [unifydb.messagequeue.memory]
-            [unifydb.storage.memory])
+            [unifydb.messagequeue.memory :as memq]
+            [unifydb.storage.memory :as memstore])
   (:import [java.io FileNotFoundException]))
 
 (def default-config
@@ -67,15 +65,21 @@
 
 (def help-opts [])
 
-(defn start-server [config])
+(defn make-queue-backend
+  "Constructs a new queue backend from the `config` map."
+  [config]
+  (condp = (get-in config [:queue-backend :type])
+    :memory (memq/new)))
 
-(defn start-query [config])
-
-(defn start-transact [config])
+(defn make-storage-backend
+  "Constructs a new storage backend from the `config` map."
+  [config]
+  (condp = (get-in config [:storage-backend :type])
+    :memory (memstore/new)))
 
 (defn start-services! [config services]
-  (let [queue-backend (:queue-backend config)
-        storage-backend (:storage-backend config)
+  (let [queue-backend (make-queue-backend config)
+        storage-backend (make-storage-backend config)
         service-impls (map #(condp = %
                               "server" (server/new queue-backend storage-backend)
                               "query" (query/new queue-backend storage-backend)
@@ -96,6 +100,7 @@
 
 (defn start
   "Start one or more of the core UnifyDB services."
+  ;; TODO validate config with spec
   [config & args]
   (let [opts (cli/parse-opts args start-opts :in-order true)
         services (if (some #{"all"} (:arguments opts))
