@@ -14,8 +14,9 @@
 (defn var-or-blank? [exp]
   (or (var? exp) (= exp '_)))
 
-(defn has-var-or-blank? [exp]
+(defn has-var-or-blank?
   "Returns true if the expression contains variables or blank signifiers"
+  [exp]
   (letfn [(tree-walk [node]
             (cond
               (var-or-blank? node) true
@@ -24,8 +25,9 @@
               :else false))]
     (tree-walk exp)))
 
-(defn cmp-fact-vec [fact1 fact2]
+(defn cmp-fact-vec
   "Like `compare`, but nil always has 0 (equal) priority instead of the least"
+  [fact1 fact2]
   (cond
     (nil? fact1) 0
     (nil? fact2) 0
@@ -34,15 +36,16 @@
                                           0
                                           (let [cmp (cmp-fact-vec (first fact1)
                                                                   (first fact2))]
-                                            (if (= cmp 0)
+                                            (if (zero? cmp)
                                               (cmp-fact-vec (rest fact1) (rest fact2))
                                               cmp)))
                                         (- (count fact1) (count fact2)))
-    (not (= (type fact1) (type fact2))) (- (hash fact1) (hash fact2))
+    (not= (type fact1) (type fact2)) (- (hash fact1) (hash fact2))
     :else (compare fact1 fact2)))
 
-(defn filter-by-tx [facts tx-id]
+(defn filter-by-tx
   "Filters out all `facts` with tx-id less than or equal to `tx-id`."
+  [facts tx-id]
   (filter #(<= (fact-tx-id %1) tx-id) facts))
 
 (defn fetch-facts-eavt [eavt query tx-id]

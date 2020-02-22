@@ -14,15 +14,17 @@
             [unifydb.util :as util])
   (:import [java.util UUID]))
 
-(defn make-new-tx-facts []
+(defn make-new-tx-facts
   "Returns the list of database operations to make a new transaction entity."
+  []
   [[:unifydb/add "unifydb.tx" :unifydb/txInstant (System/currentTimeMillis)]])
 
-(defn process-tx-data [tx-data]
+(defn process-tx-data
   "Turns a list of transaction statements in the form
    [<db operation> <entity> <attribute> <value>] into
    a list of facts ready to be transacted of the form
    [<entity> <attribute> <value> \"unifydb.tx\" <added?>]"
+  [tx-data]
   (map
    (fn [tx-stmt]
      (match tx-stmt
@@ -30,8 +32,9 @@
             [:unifydb/retract e a v] [e a v "unifydb.tx" false]))
    tx-data))
 
-(defn gen-temp-ids [storage-backend facts]
+(defn gen-temp-ids
   "Returns a map of temporray ids to actual database ids based on the facts"
+  [storage-backend facts]
   (reduce
    (fn [ids fact]
      (let [eid (fact-entity fact)]
@@ -44,8 +47,9 @@
    {}
    facts))
 
-(defn resolve-temp-ids [ids facts]
+(defn resolve-temp-ids
   "Resolves temporary ids in facts to the actual database ids."
+  [ids facts]
   (map
    (fn [fact]
      (let [e (or (get ids (fact-entity fact)) (fact-entity fact))
@@ -54,8 +58,9 @@
        [e (fact-attribute fact) v tx-id (fact-added? fact)]))
    facts))
 
-(defn do-transaction [storage-backend tx-data]
+(defn do-transaction
   "Does all necessary processing of `tx-data` and sends it off to the storage backend."
+  [storage-backend tx-data]
   (let [with-tx (into tx-data (make-new-tx-facts))
         raw-facts (process-tx-data with-tx)
         ids (gen-temp-ids storage-backend raw-facts)
@@ -93,13 +98,15 @@
   (stop! [self]
     (s/close! (:subscription @state))))
 
-(defn new [queue-backend storage-backend]
+(defn new
   "Returns a new transact component instance."
+  [queue-backend storage-backend]
   (->TransactService queue-backend storage-backend (atom {})))
 
-(defn transact [queue-backend tx-data]
+(defn transact
   "Transacts `tx-data` into the DB via `queue-backend`.
    Returns a Manifold deferred containing the tx-report."
+  [queue-backend tx-data]
   (let [id (str (UUID/randomUUID))
         results (queue/subscribe queue-backend :transact/results)]
     (queue/publish queue-backend :transact {:id id :tx-data tx-data})

@@ -78,25 +78,25 @@
         storage-backend (:storage-backend config)
         service-impls (map #(condp = %
                               "server" (server/new queue-backend storage-backend)
-                              "query" (query/new queue-backend)
-                              "transact" (transact/new queue-backend))
+                              "query" (query/new queue-backend storage-backend)
+                              "transact" (transact/new queue-backend storage-backend))
                            services)]
     (log/info "Starting services" :services services)
     (doseq [service service-impls]
       (service/start! service))
-    (-> (Runtime/getRuntime)
-        (.addShutdownHook
-         (Thread.
-          (fn []
-            (log/info "Shutting down services " :services services)
-            (doseq [service service-impls]
-              (service/stop! service))))))
+    (.addShutdownHook
+     (Runtime/getRuntime)
+     (Thread.
+      (fn []
+        (log/info "Shutting down services " :services services)
+        (doseq [service service-impls]
+          (service/stop! service)))))
     ;; Main loop
     (while true)))
 
-
-(defn start [config & args]
+(defn start
   "Start one or more of the core UnifyDB services."
+  [config & args]
   (let [opts (cli/parse-opts args start-opts :in-order true)
         services (if (some #{"all"} (:arguments opts))
                    ["server" "query" "transact"]
@@ -104,11 +104,12 @@
                            ["server" "query" "transact"]))]
     (cond
       (:help (:options opts)) {:exit-message (start-usage (:summary opts)) :ok? true}
-      (not (empty? services)) (start-services! config services)
+      (seq services) (start-services! config services)
       :else {:exit-message (start-usage (:summary opts))})))
 
-(defn help [config & args]
+(defn help
   "Display program usage documentation."
+  [config & args]
   (let [opts (cli/parse-opts args help-opts :in-order true)
         subcmd (first (:arguments opts))]
     (cond
@@ -116,8 +117,9 @@
       (nil? subcmd) {:exit-message (unifydb-usage (:summary (cli/parse-opts [] unifydb-opts))) :ok? true}
       :else {:exit-message (unifydb-usage (cli/summarize unifydb-opts))})))
 
-(defn unifydb [& args]
+(defn unifydb
   "The UnifyDB command-line interface."
+  [& args]
   (let [opts (cli/parse-opts args unifydb-opts :in-order true)
         config (:config (:options opts))
         subcmd (first (:arguments opts))

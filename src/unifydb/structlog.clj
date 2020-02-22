@@ -6,8 +6,9 @@
 
 ;; TODO read in config from unifyDB config.edn file
 
-(defn args->data-map [vargs]
+(defn args->data-map
   "Transforms raw vargs from a Timbre log call into a structured map."
+  [vargs]
   (apply hash-map vargs))
 
 (defn log-map->structlog [log-map]
@@ -23,14 +24,12 @@
     data-map))
 
 (defn edn-format [log-map]
-  (let [structlog (-> (log-map->structlog log-map)
-                      (with-err log-map))]
+  (let [structlog (with-err (log-map->structlog log-map) log-map)]
     (pr-str structlog)))
 
 ;; TODO this will blow up if it encounters a data object that isn't json-serializable
 (defn json-format [log-map]
-  (let [structlog (-> (log-map->structlog log-map)
-                      (with-err log-map))]
+  (let [structlog (with-err (log-map->structlog log-map) log-map)]
     (json/write-str structlog)))
 
 (defn human-format [log-map]

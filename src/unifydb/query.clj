@@ -17,9 +17,10 @@
 
 (declare qeval do-query)
 
-(defn conjoin [db conjuncts rules frames]
+(defn conjoin
   "Evaluates the conjunction (logical AND) of all `conjuncts` in the context of `frames`.
    Returns a seq of frames."
+  [db conjuncts rules frames]
   (log/debug "Executing conjoin" :conjuncts conjuncts :rules rules :frames frames)
   (if (empty? conjuncts)
     frames
@@ -28,9 +29,10 @@
              rules
              (qeval db (first conjuncts) rules frames))))
 
-(defn disjoin [db disjuncts rules frames]
+(defn disjoin
   "Evaluates the disjunctions (logical OR) of all `disjuncts` in the context of `frames`.
    Returns a seq of frames."
+  [db disjuncts rules frames]
   (log/debug "Executing disjoin" :disjuncts disjuncts :rules rules :frames frames)
   (if (empty? disjuncts)
     []
@@ -48,9 +50,10 @@
 ;;
 ;; See also: https://en.wikipedia.org/wiki/Negation_as_failure
 ;;           https://en.wikipedia.org/wiki/Closed-world_assumption
-(defn negate [db negatee rules frames]
+(defn negate
   "Evaluates the `negatee` in the context of `frames`, returning a seq of only
    those frames for which evaluation fails (i.e. for which the logic query cannot be made true)."
+  [db negatee rules frames]
   (log/debug "Executing negate" :negatee negatee :rules rules :frames frames)
   (mapcat
    (fn [frame]
@@ -59,8 +62,9 @@
        []))
    frames))
 
-(defn cmp-fact-versions [f1 f2]
+(defn cmp-fact-versions
   "Like compare, but gives false a higher priority than true"
+  [f1 f2]
   (match [f1 f2]
     [false true] 1
     [true false] -1
@@ -70,7 +74,7 @@
         0
         (let [cmp (cmp-fact-versions (first f1)
                                      (first f2))]
-          (if (= cmp 0)
+          (if (zero? cmp)
             (cmp-fact-versions (rest f1) (rest f2))
             cmp)))
       (- (count f1) (count f2)))
@@ -78,8 +82,9 @@
             (compare f1 f2)
             (- (hash f1) (hash f2)))))
 
-(defn filter-sorted-facts [acc sorted-facts]
+(defn filter-sorted-facts
   "Filters out facts that have been retracted."
+  [acc sorted-facts]
   (if (empty? sorted-facts)
     acc
     (if (and (not (fact-added? (first sorted-facts)))
@@ -92,19 +97,19 @@
                acc)
              (rest sorted-facts)))))
 
-(defn process-facts [db facts]
+(defn process-facts
   "Filters out any facts that have been retracted and
    handles attribute cardinality."
+  [db facts]
   (if (empty? facts)
     []
     (let [_ (log/debug "Processing facts" :facts facts :db db)
           grouped (group-by
                    (juxt fact-entity fact-attribute)
                    facts)
-          attrs (into #{} (map #'fact-attribute facts))
-          schemas (-> (do-query db
-                                (schema/make-schema-query attrs))
-                      (util/join))
+          attrs (set (map #'fact-attribute facts))
+          schemas (util/join
+                   (do-query db (schema/make-schema-query attrs)))
           cardinalities
           (reduce (fn [acc attr]
                     (if-let [cardinality
@@ -126,9 +131,10 @@
              (take 1 filtered-facts))))
        (vals grouped)))))
 
-(defn match-facts [db query frame]
+(defn match-facts
   "Returns a seq of frames obtained by pattern-matching the `query`
    against the facts in `db` in the context of `frame`."
+  [db query frame]
   (let [facts (log/spy
                :debug :processed-facts
                (process-facts
@@ -146,9 +152,10 @@
        #(unify/unify-match query % frame)
        facts)))))
 
-(defn rename-vars [rule]
+(defn rename-vars
   "Gives all the variables in the rule globally unique names
    to prevent name collisions during unification."
+  [rule]
   (let [bindings (atom {})
         rename-var (fn [var]
                      (let [v (var-name var)
@@ -161,7 +168,7 @@
         rename-vars (fn rename-vars [exp]
                       (cond
                         (var? exp) (rename-var exp)
-                        (and (sequential? exp) (not (empty? exp)))
+                        (and (sequential? exp) (seq exp))
                         (cons (rename-vars (first exp))
                               (rename-vars (rest exp)))
                         :else exp))]
@@ -183,8 +190,9 @@
           ;; Only apply rules whose names explicitly match the query
           (filter #(= (first query) (first (rule-conclusion %))) rules)))
 
-(defn simple-query [db query rules frames]
+(defn simple-query
   "Evaluates a non-compound query, returning a seq of frames."
+  [db query rules frames]
   (log/debug "Executing simple query" :query query :rules rules :frames frames)
   (mapcat
    (fn [frame]
@@ -192,9 +200,10 @@
              (apply-rules db query rules frame)))
    frames))
 
-(defn qeval [db query rules frames]
+(defn qeval
   "Evaluates a logic query given by `query` in the context of `frames`.
    Returns a seq of frames."
+  [db query rules frames]
   (log/debug "Evaluating query" :query query :rules rules :frames frames)
   (log/spy :debug :query-results
    (match (vec query)
@@ -214,13 +223,14 @@
 ;;              [:job ?author "president"]
 ;;              (:not [:hand-size ?author "small"])]]}
 
-(defn pad-clause [clause]
+(defn pad-clause
   "Ensures the clause is a 5-tuple by padding it out with _s if necessary"
+  [clause]
   (take 5 (concat clause (repeat '_))))
 
 (defn map-over-symbols [proc exp]
   (cond
-    (and (sequential? exp) (not (empty? exp)))
+    (and (sequential? exp) (seq exp))
     (conj (map-over-symbols proc (rest exp))
           (map-over-symbols proc (first exp)))
     (symbol? exp) (proc exp)
@@ -235,25 +245,28 @@
 (defn expand-question-marks [where]
   (map-over-symbols #'expand-question-mark where))
 
-(defn process-clause [clause]
+(defn process-clause
   "Processes a clause by expanding variables and padding it out to a 5-tuple"
+  [clause]
   (match (vec clause)
          [:and & conjuncts] `[:and ~@(map process-clause conjuncts)]
          [:or & disjuncts] `[:or ~@(map process-clause disjuncts)]
          [:not negatee] `[:not ~(process-clause negatee)]
          _ (-> clause (pad-clause) (expand-question-marks))))
 
-(defn process-where [where]
+(defn process-where
   "Processes a where clause by wrapping the whole clause in an :and
    and making sure each clause is a 5-tuple, padding them out with _s
    if necessary"
+  [where]
   (conj
    (map process-clause where)
    :and))
 
-(defn process-rules [rules]
+(defn process-rules
   "Processes rules by wrapping the rule bodies in an :and and
    expanding all ?vars to [? var]."
+  [rules]
   (map
    (fn [rule]
      (if (empty? (rest rule))
@@ -262,17 +275,18 @@
          [:and ~@(map process-clause (rest rule))]]))
    rules))
 
-(defn do-query [db q]
+(defn do-query
   "Runs the query `q` against `db`, returning a seq of
    frames with variables bindings."
+  [db q]
   (let [{:keys [find where rules]} q
         processed-where (process-where where)
         processed-find (vec (expand-question-marks find))
         processed-rules (process-rules rules)]
-    (->> (qeval db processed-where processed-rules [{}])
-         (map
-          (fn [frame]
-            (vec (binding/instantiate frame processed-find (fn [v f] v))))))))
+    (map
+     (fn [frame]
+       (vec (binding/instantiate frame processed-find (fn [v f] v))))
+     (qeval db processed-where processed-rules [{}]))))
 
 (defn query-callback [queue-backend storage-backend msg]
   (let [db (-> (:db msg)

@@ -6,8 +6,9 @@
 
 (defmulti subscribe-impl (fn [backend queue group] (:type backend)))
 
-(defn publish [backend queue message]
+(defn publish
   "Publishes `message` onto the queue named `queue`."
+  [backend queue message]
   (log/debug "Publishing message"
              :queue queue
              :message message

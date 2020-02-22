@@ -16,8 +16,9 @@
             [unifydb.util :as util])
   (:import [java.util UUID]))
 
-(defn edn->json [edn-data]
+(defn edn->json
   "Transforms idiomatic EDN to a format that can be losslessly represented as JSON."
+  [edn-data]
   (cond
     (keyword? edn-data) (str edn-data)
     (symbol? edn-data) (str "'" edn-data)
@@ -27,7 +28,7 @@
          (string/starts-with? edn-data "'")) (str "\\" edn-data)
     (and (string? edn-data)
          (string/starts-with? edn-data "\\")) (str "\\" edn-data)
-    (vector? edn-data) (into [] (map edn->json edn-data))
+    (vector? edn-data) (vec (map edn->json edn-data))
     (map? edn-data) (into {} (map
                               #(vector (edn->json (first %))
                                        (edn->json (second %)))
@@ -36,8 +37,9 @@
     (set? edn-data) (into ["#set"] (map edn->json edn-data))
     :else edn-data))
 
-(defn json->edn [json-data]
+(defn json->edn
   "Transforms JSON representing EDN data into actual EDN data. The reverse of edn->json."
+  [json-data]
   (cond
     (and (string? json-data)
          (string/starts-with? json-data ":")) (keyword (subs json-data 1))
@@ -48,8 +50,8 @@
     (and (vector? json-data)
          (= (first json-data) "#list")) (into '() (map json->edn (rest json-data)))
     (and (vector? json-data)
-         (= (first json-data) "#set")) (into #{} (map json->edn (rest json-data)))
-    (vector? json-data) (into [] (map json->edn json-data))
+         (= (first json-data) "#set")) (set (map json->edn (rest json-data)))
+    (vector? json-data) (vec (map json->edn json-data))
     (map? json-data) (into {} (map
                                #(vector (json->edn (first %))
                                         (json->edn (second %)))
@@ -109,10 +111,9 @@
         (d/success-deferred {:status 400
                              :headers {"Content-Type" "application/json"}
                              :body (json/write-str (:error wrapper))})
-        (-> (handler request)
-            (d/chain #(assoc % :body ((:fn wrapper) (:body %)))
-                     #(assoc % :headers
-                             (assoc (:headers %) "Content-Type" (:type wrapper)))))))))
+        (d/chain (handler request)
+                 #(update-in % [:body] (:fn wrapper))
+                 #(assoc-in % [:headers "Content-Type"] (:type wrapper)))))))
 
 (defn wrap-logging [handler]
   (fn [request]

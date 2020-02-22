@@ -5,10 +5,11 @@
 
 (declare unify-match)
 
-(defn depends-on? [exp var frame]
+(defn depends-on?
   "Determines if `exp` contains `var` in the context
    of `frame` by recursively walking through `exp`
    looking for `var`."
+  [exp var frame]
   (letfn [(tree-walk [node]
             (cond
               (var? node) (if (= var node)
@@ -22,9 +23,10 @@
               :else false))]
     (tree-walk exp)))
 
-(defn extend-if-possible [var val frame]
+(defn extend-if-possible
   "Extends the frame by binding `var` to `val` unless that
    results in an invalid state, in which case return :failed."
+  [var val frame]
   (let [binding-value (frame-binding frame var)]
     (cond
       ;; If the var is already bound in the frame, attempt to unify its value with the new value
@@ -42,14 +44,15 @@
       :else (extend-frame frame var val))))
 
 
-(defn unify-match [pattern1 pattern2 frame]
+(defn unify-match
   "Unifies `pattern1` with `pattern2` by binding variables
    in `frame` such that both patterns could have the same
    value. Some pattern variables in either pattern may remain
    unbound.
-   
+
    For example, (unify-match '[?a ?b foo ?f] '[?c [?d bar] ?e ?f] {}) yields
    the new frame '{a ?c, b [?d bar], e foo}, leaving f unbound."
+  [pattern1 pattern2 frame]
   (cond
     ;; If the unification has already failed, short-circuit
     (= frame :failed) :failed
