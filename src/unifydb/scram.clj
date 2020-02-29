@@ -1,6 +1,7 @@
 (ns unifydb.scram
   (:require [clojure.string :as string])
-  (:import [javax.crypto Mac]
+  (:import [java.util Base64]
+           [javax.crypto Mac]
            [javax.crypto.spec SecretKeySpec]))
 
 (defn hmac
@@ -49,3 +50,13 @@
               []
               (range i))]
     (apply bit-xor-array arrs)))
+
+(defn encode
+  "Base64-encodes `to-encode`, returning a string."
+  [to-encode]
+  (.encodeToString (Base64/getEncoder) (.getBytes to-encode)))
+
+(defn decode
+  "Base64-decodes the encoded string `to-decode`, returning a byte array."
+  [to-decode]
+  (.decode (Base64/getDecoder) to-decode))
