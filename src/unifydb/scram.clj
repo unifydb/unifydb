@@ -2,8 +2,8 @@
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as string])
   (:import [java.util Base64]
-           [javax.crypto Mac]
-           [javax.crypto.spec SecretKeySpec]))
+           [javax.crypto Mac SecretKeyFactory]
+           [javax.crypto.spec PBEKeySpec SecretKeySpec]))
 
 (s/fdef hmac
   :args (s/cat :key bytes? :string bytes)
@@ -46,29 +46,25 @@
       (aset-byte res i (bit-xor (nth res i) (nth arr i))))
     res))
 
-(s/fdef hi
+(defn bytes->chars
+  "Converts a byte array to a char array."
+  [input]
+  (let [len (count input)
+        res (char-array len)]
+    (doseq [i (range len)]
+      (aset-char res i (char (nth input i))))
+    res))
+
+(s/fdef pbk-df2-hmac-sha256
   :args (s/cat :string bytes? :salt bytes? :i int?)
   :ret bytes?)
-(defn hi
-  "The Hi operation defined in RFC5802.
+(defn pbk-df2-hmac-sha256
+  "The H^i operation defined in RFC5802.
   See https://tools.ietf.org/html/rfc5802."
   [string salt i]
-  (let [arrs (reduce
-              (fn [acc _]
-                (conj acc
-                      (hmac string
-                            (or (last acc)
-                                (byte-array
-                                 (apply concat
-                                        [salt
-                                         ;; 1 as a 4-byte int:
-                                         [0 0 0 0 0 0 0 0
-                                          0 0 0 0 0 0 0 0
-                                          0 0 0 0 0 0 0 0
-                                          0 0 0 0 0 0 0 1]]))))))
-              []
-              (range i))]
-    (apply bit-xor-array arrs)))
+  (let [secret-factory (SecretKeyFactory/getInstance "PBKDF2WithHmacSHA256")
+        spec (PBEKeySpec. (bytes->chars string) salt i 32)]
+    (.getEncoded (.generateSecret secret-factory spec))))
 
 (s/fdef encode
   :args (s/cat :to-encode bytes?)
