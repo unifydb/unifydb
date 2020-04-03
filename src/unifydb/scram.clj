@@ -16,10 +16,10 @@
   (let [mac (Mac/getInstance "HMACSHA256")
         secret (SecretKeySpec. key
                                (.getAlgorithm mac))]
-    (-> (doto mac
-          (.init secret)
-          (.update string))
-        (.doFinal))))
+    (.doFinal
+     (doto mac
+       (.init secret)
+       (.update string)))))
 
 (s/fdef bit-xor-array
   :args (s/and (s/cat :arr1 bytes? :arr2 bytes? :arrs (s/* bytes?))
