@@ -3,7 +3,8 @@
             [clojure.string :as string])
   (:import [java.util Base64]
            [javax.crypto Mac SecretKeyFactory]
-           [javax.crypto.spec PBEKeySpec SecretKeySpec]))
+           [javax.crypto.spec PBEKeySpec SecretKeySpec]
+           [java.security MessageDigest]))
 
 (s/fdef hmac
   :args (s/cat :key bytes? :string bytes)
@@ -45,6 +46,15 @@
             i (range len)]
       (aset-byte res i (bit-xor (nth res i) (nth arr i))))
     res))
+
+(s/fdef hash-sha256
+  :args (s/cat :input bytes?)
+  :ret bytes?)
+(defn hash-sha256
+  "Computes the SHA-256 hash of the input."
+  [input]
+  (let [message-digest (MessageDigest/getInstance "SHA-256")]
+    (.digest input)))
 
 (defn bytes->chars
   "Converts a byte array to a char array."
