@@ -1,6 +1,7 @@
 (ns unifydb.scram
   (:require [clojure.spec.alpha :as s]
-            [clojure.string :as string])
+            [clojure.string :as string]
+            [unifydb.stringprep :as stringprep])
   (:import [java.util Base64]
            [javax.crypto Mac SecretKeyFactory]
            [javax.crypto.spec PBEKeySpec SecretKeySpec]
@@ -75,6 +76,12 @@
   (let [secret-factory (SecretKeyFactory/getInstance "PBKDF2WithHmacSHA256")
         spec (PBEKeySpec. (bytes->chars string) salt i 32)]
     (.getEncoded (.generateSecret secret-factory spec))))
+
+(defn normalize
+  "Normalizes a Unicode string."
+  [input]
+  ;; TODO handle error case here?
+  (stringprep/saslprep input))
 
 (s/fdef encode
   :args (s/cat :to-encode bytes?)
