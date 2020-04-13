@@ -146,10 +146,71 @@
              (code-points-seq
               (subs input (Character/charCount codepoint))))))))
 
+(defn char-r-or-al
+  [codepoint]
+  (#{Character/DIRECTIONALITY_RIGHT_TO_LEFT
+     Character/DIRECTIONALITY_RIGHT_TO_LEFT_ARABIC}
+   (Character/getDirectionality codepoint)))
+
+(defn char-l
+  [codepoint]
+  (= Character/DIRECTIONALITY_LEFT_TO_RIGHT
+     (Character/getDirectionality codepoint)))
+
 (defn improper-bidi
   [input]
-  ;; TODO implement me
-  true)
+  (letfn [(run-state [{:keys [input-seq
+                              contains-lcat
+                              contains-randalcat
+                              first?
+                              first-randalcat?
+                              last-randalcat?]
+                       [codepoint & rest-codepoints] :input-seq}]
+            (cond
+              (and contains-randalcat contains-lcat) ::error
+              (and (nil? codepoint)
+                   contains-randalcat
+                   (not (and first-randalcat?
+                             last-randalcat?))) ::error
+              (nil? codepoint) input
+
+              (and first? (char-r-or-al codepoint)) (recur {:input-seq rest-codepoints
+                                                            :contains-lcat contains-lcat
+                                                            :contains-randalcat true
+                                                            :first? false
+                                                            :first-randalcat? true
+                                                            :last-randalcat? last-randalcat?})
+              (and (nil? rest-codepoints)
+                   (char-r-or-al codepoint)) (recur {:input-seq rest-codepoints
+                                                     :contains-lcat contains-lcat
+                                                     :contains-randalcat true
+                                                     :first? false
+                                                     :first-randalcat? first-randalcat?
+                                                     :last-randalcat? true})
+              (char-r-or-al codepoint) (recur {:input-seq rest-codepoints
+                                               :contains-lcat contains-lcat
+                                               :contains-randalcat true
+                                               :first? false
+                                               :first-randalcat? first-randalcat?
+                                               :last-randalcat? last-randalcat?})
+              (char-l codepoint) (recur {:input-seq rest-codepoints
+                                         :contains-lcat true
+                                         :contains-randalcat contains-randalcat
+                                         :first? false
+                                         :first-randalcat? first-randalcat?
+                                         :last-randalcat? last-randalcat?})
+              :else (recur {:input-seq rest-codepoints
+                            :contains-lcat contains-lcat
+                            :contains-randalcat contains-randalcat
+                            :first? false
+                            :first-randalcat? first-randalcat?
+                            :last-randalcat? last-randalcat?})))]
+    (run-state {:input-seq (code-points-seq input)
+                :contains-lcat false
+                :contains-randalcat false
+                :first? true
+                :first-randalcat? false
+                :last-randalcat? false})))
 
 (defn saslprep
   "Prepares `input` using the SASLprep profile.
@@ -163,5 +224,5 @@
                      (nfkc))]
     (cond
       (some saslprep-prohibited (code-points-seq prepped)) ::error
-      (improper-bidi prepped) ::error
+      (= (improper-bidi prepped) ::error) ::error
       :else prepped)))
