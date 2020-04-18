@@ -118,8 +118,13 @@
   (let [opts (cli/parse-opts args help-opts :in-order true)
         subcmd (first (:arguments opts))]
     (cond
-      (= subcmd "start") {:exit-message (start-usage (:summary (cli/parse-opts [] start-opts))) :ok? true}
-      (nil? subcmd) {:exit-message (unifydb-usage (:summary (cli/parse-opts [] unifydb-opts))) :ok? true}
+      (= subcmd "start") {:exit-message (start-usage
+                                         (:summary
+                                          (cli/parse-opts [] start-opts)))
+                          :ok? true}
+      (nil? subcmd) {:exit-message (unifydb-usage
+                                    (:summary (cli/parse-opts [] unifydb-opts)))
+                     :ok? true}
       :else {:exit-message (unifydb-usage (cli/summarize unifydb-opts))})))
 
 (defn unifydb
@@ -130,7 +135,8 @@
         subcmd (first (:arguments opts))
         subcmd-args (rest (:arguments opts))]
     (cond
-      (:help (:options opts)) {:exit-message (unifydb-usage (:summary opts)) :ok? true}
+      (:help (:options opts)) {:exit-message (unifydb-usage (:summary opts))
+                               :ok? true}
       (= "start" subcmd) (apply start config subcmd-args)
       (= "help" subcmd) (apply help config subcmd-args)
       :else {:exit-message (unifydb-usage (:summary opts))})))
