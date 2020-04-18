@@ -7,9 +7,6 @@
            [javax.crypto.spec PBEKeySpec SecretKeySpec]
            [java.security MessageDigest SecureRandom]))
 
-(s/fdef hmac
-  :args (s/cat :key bytes? :string bytes)
-  :ret bytes?)
 (defn hmac
   "Calculates the HMAC signature of `string`
   given the `key`. `string` and `key` should be
@@ -23,18 +20,6 @@
        (.init secret)
        (.update string)))))
 
-(s/fdef bit-xor-array
-  :args (s/and (s/cat :arr1 bytes? :arr2 bytes? :arrs (s/* bytes?))
-               #(apply =
-                       (count (:arr1 %))
-                       (count (:arr2 %))
-                       (map count (:arrs %))))
-  :ret bytes?
-  :fn #(apply =
-              (count (-> % :args :arr1))
-              (count (-> % :args :arr2))
-              (count (:ret %))
-              (map count (-> % :args :arrs))))
 (defn bit-xor-array
   "Computes the piecewise exclusive-or of the input byte arrays.
   Returns the result as a byte-array.
@@ -48,9 +33,6 @@
       (aset-byte res i (bit-xor (nth res i) (nth arr i))))
     res))
 
-(s/fdef hash-sha256
-  :args (s/cat :input bytes?)
-  :ret bytes?)
 (defn hash-sha256
   "Computes the SHA-256 hash of the input."
   [input]
@@ -66,9 +48,6 @@
       (aset-char res i (char (nth input i))))
     res))
 
-(s/fdef pbk-df2-hmac-sha256
-  :args (s/cat :string bytes? :salt bytes? :i int?)
-  :ret bytes?)
 (defn pbk-df2-hmac-sha256
   "The H^i operation defined in RFC5802.
   See https://tools.ietf.org/html/rfc5802."
@@ -83,9 +62,6 @@
   ;; TODO handle error case here?
   (stringprep/saslprep input))
 
-(s/fdef encode
-  :args (s/cat :to-encode bytes?)
-  :ret string?)
 (defn salt
   "Generates a cryptographically-secure random byte array."
   []
@@ -98,9 +74,6 @@
   [to-encode]
   (.encodeToString (Base64/getEncoder) to-encode))
 
-(s/fdef decode
-  :args (s/cat :to-decode string?)
-  :ret bytes?)
 (defn decode
   "Base64-decodes the encoded string `to-decode`, returning a byte array."
   [to-decode]
