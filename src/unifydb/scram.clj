@@ -96,7 +96,7 @@
 (defn encode
   "Base64-encodes `to-encode`, returning a string."
   [to-encode]
-  (.encodeToString (Base64/getEncoder) (.getBytes to-encode)))
+  (.encodeToString (Base64/getEncoder) to-encode))
 
 (s/fdef decode
   :args (s/cat :to-decode string?)
