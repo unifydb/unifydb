@@ -5,7 +5,7 @@
   (:import [java.util Base64]
            [javax.crypto Mac SecretKeyFactory]
            [javax.crypto.spec PBEKeySpec SecretKeySpec]
-           [java.security MessageDigest]))
+           [java.security MessageDigest SecureRandom]))
 
 (s/fdef hmac
   :args (s/cat :key bytes? :string bytes)
@@ -86,6 +86,13 @@
 (s/fdef encode
   :args (s/cat :to-encode bytes?)
   :ret string?)
+(defn salt
+  "Generates a cryptographically-secure random byte array."
+  []
+  (let [arr (byte-array 16)]
+    (.nextBytes (SecureRandom.) arr)
+    arr))
+
 (defn encode
   "Base64-encodes `to-encode`, returning a string."
   [to-encode]
