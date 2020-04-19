@@ -2,7 +2,8 @@
   (:require [clojure.edn :as edn]
             [clojure.string :as string]
             [clojure.tools.cli :as cli]
-            [unifydb.cli.start :as start])
+            [unifydb.cli.start :as start]
+            [unifydb.cli.user :as user])
   (:import [java.io FileNotFoundException]))
 
 (def default-config
@@ -20,6 +21,7 @@
         ""
         "SUBCOMMANDS"
         "  start    Start one or more of the core UnifyDB services"
+        "  user     Manage users"
         "  help     Display program usage documentation"
         ""
         "Run \"unifydb help <SUBCOMMAND>\" for usage information for each subcommand."]
@@ -50,6 +52,9 @@
                                          (:summary
                                           (cli/parse-opts [] start/options)))
                           :ok? true}
+      (= subcmd "user") {:exit-message (user/usage
+                                        (:summary
+                                         (cli/parse-opts [] user/options)))}
       (nil? subcmd) {:exit-message (unifydb-usage
                                     (:summary (cli/parse-opts [] unifydb-opts)))
                      :ok? true}
@@ -67,4 +72,5 @@
                                :ok? true}
       (= "start" subcmd) (apply start/start config subcmd-args)
       (= "help" subcmd) (apply help config subcmd-args)
+      (= "user" subcmd) (apply user/user config subcmd-args)
       :else {:exit-message (unifydb-usage (:summary opts))})))
