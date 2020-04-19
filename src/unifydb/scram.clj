@@ -37,7 +37,7 @@
   "Computes the SHA-256 hash of the input."
   [input]
   (let [message-digest (MessageDigest/getInstance "SHA-256")]
-    (.digest input)))
+    (.digest message-digest input)))
 
 (defn bytes->chars
   "Converts a byte array to a char array."
