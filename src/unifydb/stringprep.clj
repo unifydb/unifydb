@@ -146,6 +146,12 @@
              (code-points-seq
               (subs input (Character/charCount codepoint))))))))
 
+(defn check-prohibited
+  [input]
+  (if (some saslprep-prohibited (code-points-seq input))
+    (throw (error "Prohibited codepoints"))
+    input))
+
 (defn char-r-or-al
   [codepoint]
   (#{Character/DIRECTIONALITY_RIGHT_TO_LEFT
@@ -157,6 +163,10 @@
   (= Character/DIRECTIONALITY_LEFT_TO_RIGHT
      (Character/getDirectionality codepoint)))
 
+(defn error
+  [msg]
+  (ex-info msg {:type ::normalization}))
+
 (defn improper-bidi
   [input]
   (letfn [(run-state [{:keys [input-seq
@@ -167,11 +177,13 @@
                               last-randalcat?]
                        [codepoint & rest-codepoints] :input-seq}]
             (cond
-              (and contains-randalcat contains-lcat) ::error
+              (and contains-randalcat
+                   contains-lcat) (throw (error "Invalid bidirectionality"))
               (and (nil? codepoint)
                    contains-randalcat
                    (not (and first-randalcat?
-                             last-randalcat?))) ::error
+                             last-randalcat?))) (throw
+                                                 (error "Invalid bidirectionality"))
               (nil? codepoint) input
 
               (and first? (char-r-or-al codepoint)) (recur {:input-seq rest-codepoints
@@ -214,15 +226,12 @@
 
 (defn saslprep
   "Prepares `input` using the SASLprep profile.
-  Returns either the prepared string or ::error.
   See https://tools.ietf.org/html/rfc4013."
   [input]
-  (let [prepped (->> input
-                     (map #(or (saslprep-mapping %) %))
-                     (filter #(not= ::nothing %))
-                     (apply str)
-                     (nfkc))]
-    (cond
-      (some saslprep-prohibited (code-points-seq prepped)) ::error
-      (= (improper-bidi prepped) ::error) ::error
-      :else prepped)))
+  (->> input
+       (map #(or (saslprep-mapping %) %))
+       (filter #(not= ::nothing %))
+       (apply str)
+       (nfkc)
+       (check-prohibited)
+       (improper-bidi)))

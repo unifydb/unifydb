@@ -63,11 +63,13 @@
   (stringprep/saslprep input))
 
 (defn salt
-  "Generates a cryptographically-secure random byte array."
-  []
-  (let [arr (byte-array 16)]
-    (.nextBytes (SecureRandom.) arr)
-    arr))
+  "Generates a cryptographically-secure random byte array.
+  For deterministic output, pass a pre-seeded Random instance."
+  ([random]
+   (let [arr (byte-array 16)]
+     (.nextBytes random arr)
+     arr))
+  ([] (salt (SecureRandom.))))
 
 (defn encode
   "Base64-encodes `to-encode`, returning a string."

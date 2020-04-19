@@ -16,6 +16,8 @@
     (is (= (sp/saslprep "\u2168") "IX"))
     (is (= (sp/saslprep "\u2168") (sp/saslprep "I\u00ADX"))))
   (testing "Prohibited characters"
-    (is (= (sp/saslprep "\u0007") ::sp/error)))
+    (is (thrown-with-msg? Exception #"Prohibited codepoints"
+                          (sp/saslprep "\u0007"))))
   (testing "Bidi check"
-    (is (= (sp/saslprep "\u0627\u0031") ::sp/error))))
+    (is (thrown-with-msg? Exception #"Invalid bidirectionality"
+                          (sp/saslprep "\u0627\u0031")))))
