@@ -29,22 +29,22 @@
 
 (def unifydb-opts
   [["-c" "--config FILE" "Configuration file path"
-    :default-fn (fn [opts]
+    :default-fn (fn [_opts]
                   (try
                     (edn/read-string (slurp "/etc/unifydb/config.edn"))
-                    (catch FileNotFoundException ex default-config)))
+                    (catch FileNotFoundException _ex default-config)))
     :default-desc "/etc/unifydb/config.edn"
     :parse-fn (fn [path]
                 (try
                   (edn/read-string (slurp path))
-                  (catch FileNotFoundException ex default-config)))]
+                  (catch FileNotFoundException _ex default-config)))]
    ["-h" "--help" "Display this message and exit"]])
 
 (def help-opts [])
 
 (defn help
   "Display program usage documentation."
-  [config & args]
+  [_config & args]
   (let [opts (cli/parse-opts args help-opts :in-order true)
         subcmd (first (:arguments opts))]
     (cond
