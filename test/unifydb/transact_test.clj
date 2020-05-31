@@ -1,14 +1,10 @@
 (ns unifydb.transact-test
   (:require [clojure.test :refer [deftest testing is]]
-            [manifold.stream :as s]
             [unifydb.facts :refer [fact-entity
-                                   fact-tx-id
                                    fact-value
                                    fact-attribute]]
-            [unifydb.messagequeue :as queue]
             [unifydb.messagequeue.memory :as memq]
             [unifydb.service :as service]
-            [unifydb.storage.memory :as memdb]
             [unifydb.transact :as t]
             [unifydb.storage.memory :as memstore]))
 

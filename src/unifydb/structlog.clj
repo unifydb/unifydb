@@ -1,7 +1,6 @@
 (ns unifydb.structlog
   (:require [clojure.data.json :as json]
             [clojure.string :as string]
-            [clojure.pprint :as pprint]
             [taoensso.timbre :as timbre]))
 
 ;; TODO read in config from unifyDB config.edn file

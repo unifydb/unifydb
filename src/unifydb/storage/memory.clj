@@ -134,7 +134,7 @@
                        #(into % facts-avet)))))
     this)
   (fetch-facts [this query tx-id frame]
-    (let [instantiated (binding/instantiate frame query (fn [v f] v))]
+    (let [instantiated (binding/instantiate frame query (fn [v _f] v))]
       (fetch-facts-from-index @(:state this) instantiated tx-id)))
   (get-next-id [this]
     (:id-counter

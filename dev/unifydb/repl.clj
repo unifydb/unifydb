@@ -1,11 +1,19 @@
 (ns unifydb.repl
   "A bunch of utilities to make the REPL development experience easier"
+  {:clj-kondo/config
+   '{:linters
+     {:unused-namespace
+      {:exclude [clojure.edn
+                 clojure.pprint
+                 clojure.test
+                 unifydb.messagequeue
+                 unifydb.transact
+                 unifydb.util]}}}}
   (:require [cognitect.test-runner :as test-runner]
             [clojure.edn :as edn]
             [clojure.repl :refer :all]
             [clojure.pprint :refer [pprint]]
             [clojure.test :refer [run-tests]]
-            [taoensso.timbre :as log]
             [unifydb.messagequeue :as queue :refer [publish subscribe]]
             [unifydb.messagequeue.memory :as memq]
             [unifydb.query :as query]

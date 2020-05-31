@@ -1,19 +1,17 @@
 (ns unifydb.query
   (:refer-clojure :exclude [var?])
   (:require [clojure.core.match :refer [match]]
-            [manifold.deferred :as d]
             [manifold.stream :as s]
             [taoensso.timbre :as log]
             [unifydb.binding :as binding :refer [var? var-name]]
-            [unifydb.facts :refer [fact-entity fact-attribute fact-value fact-added?]]
+            [unifydb.facts :refer [fact-entity fact-attribute fact-added?]]
             [unifydb.messagequeue :as queue]
             [unifydb.rules :refer [rule-body rule-conclusion]]
             [unifydb.schema :as schema]
             [unifydb.service :as service]
             [unifydb.storage :as store]
             [unifydb.unify :as unify]
-            [unifydb.util :as util :refer [when-let* take-n!]])
-  (:import [java.util UUID]))
+            [unifydb.util :as util]))
 
 (declare qeval do-query)
 
@@ -285,7 +283,7 @@
         processed-rules (process-rules rules)]
     (map
      (fn [frame]
-       (vec (binding/instantiate frame processed-find (fn [v f] v))))
+       (vec (binding/instantiate frame processed-find (fn [v _f] v))))
      (qeval db processed-where processed-rules [{}]))))
 
 (defn query-callback [queue-backend storage-backend msg]
