@@ -2,9 +2,7 @@
   (:require [manifold.bus :as bus]
             [manifold.deferred :as d]
             [manifold.stream :as s]
-            [taoensso.timbre :as log]
-            [unifydb.messagequeue :as q])
-  (:import [java.util UUID]))
+            [unifydb.messagequeue :as q]))
 
 (defn group-key
   "Returns the keyword that identifies
