@@ -146,6 +146,10 @@
              (code-points-seq
               (subs input (Character/charCount codepoint))))))))
 
+(defn error
+  [msg]
+  (ex-info msg {:type ::normalization}))
+
 (defn check-prohibited
   [input]
   (if (some saslprep-prohibited (code-points-seq input))
@@ -163,14 +167,9 @@
   (= Character/DIRECTIONALITY_LEFT_TO_RIGHT
      (Character/getDirectionality codepoint)))
 
-(defn error
-  [msg]
-  (ex-info msg {:type ::normalization}))
-
 (defn improper-bidi
   [input]
-  (letfn [(run-state [{:keys [input-seq
-                              contains-lcat
+  (letfn [(run-state [{:keys [contains-lcat
                               contains-randalcat
                               first?
                               first-randalcat?

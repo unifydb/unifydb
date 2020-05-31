@@ -1,7 +1,5 @@
 (ns unifydb.scram
-  (:require [clojure.spec.alpha :as s]
-            [clojure.string :as string]
-            [unifydb.stringprep :as stringprep])
+  (:require [unifydb.stringprep :as stringprep])
   (:import [java.util Base64]
            [javax.crypto Mac SecretKeyFactory]
            [javax.crypto.spec PBEKeySpec SecretKeySpec]

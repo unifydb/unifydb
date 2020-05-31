@@ -1,7 +1,6 @@
 (ns unifydb.user
   (:require [unifydb.scram :as s]
-            [unifydb.transact :as t]
-            [unifydb.cli.unifydb :as unifydb])
+            [unifydb.transact :as t])
   (:import [java.security SecureRandom]))
 
 (defn make-user

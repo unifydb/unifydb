@@ -34,7 +34,7 @@
 
 (defn create
   "Creates a new user."
-  [config & args]
+  [_config & args]
   (let [opts (cli/parse-opts args create-options :in-order true)
         ;; TODO read user input if no username or password
         username (first args)
