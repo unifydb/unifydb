@@ -1,6 +1,5 @@
 (ns unifydb.transact
   (:require [clojure.core.match :refer [match]]
-            [clojure.tools.logging :as log]
             [manifold.deferred :as d]
             [manifold.stream :as s]
             [unifydb.facts :refer [fact-entity
@@ -10,8 +9,7 @@
                                    fact-added?]]
             [unifydb.messagequeue :as queue]
             [unifydb.service :as service]
-            [unifydb.storage :as storage]
-            [unifydb.util :as util])
+            [unifydb.storage :as storage])
   (:import [java.util UUID]))
 
 (defn make-new-tx-facts

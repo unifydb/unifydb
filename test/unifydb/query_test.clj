@@ -1,6 +1,9 @@
 (ns unifydb.query-test
+  {:clj-kondo/config
+   '{:linters
+     {:unresolved-symbol
+      {:exclude [(unifydb.query-test/defquerytest)]}}}}
   (:require [clojure.test :refer [deftest is testing]]
-            [unifydb.messagequeue :as queue]
             [unifydb.messagequeue.memory :as memqueue]
             [unifydb.query :as query]
             [unifydb.service :as service]
@@ -34,7 +37,7 @@
    [3 :address [:slumerville [:davis :square] 42] 4 true]]
   (let [db-latest {:tx-id 4}
         db-tx-2 {:tx-id 2}]
-    (doseq [{:keys [query db expected name]}
+    (doseq [{:keys [query db expected]}
             [{:query '{:find [?e]
                        :where [[?e :name "Ben Bitdiddle"]]}
               :db db-latest
@@ -77,7 +80,7 @@
    [2 :address [:cambridge [:mass :ave] 78] 3 false]
    [3 :address [:slumerville [:davis :square] 42] 4 true]]
   (let [db {:tx-id 4}]
-    (doseq [{:keys [query db expected name]}
+    (doseq [{:keys [query db expected]}
             [{:query '{:find [?e ?what]
                        :where [[:and
                                 [?e :job [:computer ?what]]
@@ -118,7 +121,7 @@
    [2 :address [:cambridge [:mass :ave] 78] 3 false]
    [3 :address [:slumerville [:davis :square] 42] 4 true]]
   (let [db {:tx-id 4}]
-    (doseq [{:keys [query db expected name]}
+    (doseq [{:keys [query db expected]}
             [{:query '{:find [?who]
                        :where [(:lives-near ?who 1)]
                        :rules [[(:lives-near ?person1 ?person2)

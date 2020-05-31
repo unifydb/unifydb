@@ -3,14 +3,11 @@
             [clojure.data.json :as json]
             [clojure.edn :as edn]
             [clojure.string :as string]
-            [compojure.core :as compojure :refer [GET POST]]
+            [compojure.core :as compojure :refer [POST]]
             [compojure.route :as route]
             [manifold.deferred :as d]
-            [manifold.stream :as s]
             [ring.util.request :as request]
             [taoensso.timbre :as log]
-            [unifydb.messagequeue :as queue]
-            [unifydb.query :as query]
             [unifydb.service :as service]
             [unifydb.transact :as transact]
             [unifydb.util :as util])
@@ -77,8 +74,8 @@
 
 (defn routes [queue-backend]
   (compojure/routes
-   (POST "/query" request (query queue-backend))
-   (POST "/transact" request (transact queue-backend))
+   (POST "/query" _request (query queue-backend))
+   (POST "/transact" _request (transact queue-backend))
    (route/not-found
     {:body {:message "These aren't the droids you're looking for."}})))
 

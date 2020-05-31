@@ -1,6 +1,5 @@
 (ns unifydb.storage.memory-test
   (:require [clojure.test :refer [deftest is]]
-            [me.tonsky.persistent-sorted-set :as set]
             [unifydb.storage.memory :as mem]
             [unifydb.storage :as store]))
 

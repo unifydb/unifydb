@@ -1,0 +1,5 @@
+{:linters
+ {:not-a-function
+  {:skip-args [clojure.core.match/match]}
+  :unresolved-symbol
+  {:exclude [(clojure.core.match/match)]}}}

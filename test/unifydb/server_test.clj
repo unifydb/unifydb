@@ -1,8 +1,11 @@
 (ns unifydb.server-test
+  {:clj-kondo/config
+   '{:linters
+     {:unresolved-symbol
+      {:exclude [(unifydb.server-test/defservertest)]}}}}
   (:require [clojure.data.json :as json]
             [clojure.edn :as edn]
             [clojure.test :refer [deftest testing is]]
-            [manifold.deferred :as d]
             [unifydb.messagequeue :as queue]
             [unifydb.messagequeue.memory :as memq]
             [unifydb.query :as query]
