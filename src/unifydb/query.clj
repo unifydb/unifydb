@@ -37,14 +37,16 @@
     (concat (qeval db (first disjuncts) rules frames)
             (disjoin db (rest disjuncts) rules frames))))
 
-;; This is a shitty implementation of negation because it acts only as a filter,
-;; meaning it is only valid as one of the subsequent clauses in an :and query.
-;; In other words, [:not [?e :name "Foo"]] always returns the empty stream, even if
-;; there are entities in the database whose :name is not "Foo". To get this to work
-;; right you'd need to do [:and [?e ?a ?v] [:not [?e :name "Foo"]]] - in other words,
-;; generating a stream of every fact in the database and then passing it through the
-;; :not filter. This is an acceptable solution for now but it should be clearly
-;; documented and hopefully one day improved.
+;; This is a shitty implementation of negation because it acts only as
+;; a filter, meaning it is only valid as one of the subsequent clauses
+;; in an :and query.  In other words, [:not [?e :name "Foo"]] always
+;; returns the empty stream, even if there are entities in the
+;; database whose :name is not "Foo". To get this to work right you'd
+;; need to do [:and [?e ?a ?v] [:not [?e :name "Foo"]]] - in other
+;; words, generating a stream of every fact in the database and then
+;; passing it through the :not filter. This is an acceptable solution
+;; for now but it should be clearly documented and hopefully one day
+;; improved.
 ;;
 ;; See also: https://en.wikipedia.org/wiki/Negation_as_failure
 ;;           https://en.wikipedia.org/wiki/Closed-world_assumption
@@ -58,6 +60,28 @@
      (if (empty? (qeval db negatee rules [frame]))
        [frame]
        []))
+   frames))
+
+(defn safe-ns-resolve
+  "Like ns-resolve but never returns `'clojure.core/eval`"
+  [ns sym]
+  (let [resolved (ns-resolve ns sym)]
+    (when (not= resolved #'clojure.core/eval)
+      resolved)))
+
+(defn apply-predicate
+  "Applies the `pred` to the `args` in the context of `frames`,
+  returning a seq of frames"
+  [_db pred args _rules frames]
+  (mapcat
+   (fn [frame]
+     (let [instantiated (binding/instantiate frame args (fn [v _f] v))
+           operator (or (safe-ns-resolve 'clojure.core pred)
+                        (match pred
+                          '!= not=))]
+       (if (apply operator instantiated)
+         [frame]
+         [])))
    frames))
 
 (defn cmp-fact-versions
@@ -208,18 +232,9 @@
              [:and & conjuncts] (conjoin db conjuncts rules frames)
              [:or & disjuncts] (disjoin db disjuncts rules frames)
              [:not negatee] (negate db negatee rules frames)
-          ;; TODO support lisp-value?
+             [([pred & args] :seq)] (apply-predicate db pred args rules frames)
              [:always-true] frames
              _ (simple-query db query rules frames))))
-
-;; A query is a map with the following structure:
-;;    {:find [?user ?tweet]
-;;     :where [[:likes ?user ?tweet]
-;;             (presidential ?tweet)]
-;;     :rules [[(presidential ?tweet)
-;;              [:author ?tweet ?author]
-;;              [:job ?author "president"]
-;;              (:not [:hand-size ?author "small"])]]}
 
 (defn pad-clause
   "Ensures the clause is a 5-tuple by padding it out with _s if necessary"
@@ -250,6 +265,7 @@
     [:and & conjuncts] `[:and ~@(map process-clause conjuncts)]
     [:or & disjuncts] `[:or ~@(map process-clause disjuncts)]
     [:not negatee] `[:not ~(process-clause negatee)]
+    [([op & args] :seq)] `[(~op ~@(map expand-question-marks args))]
     _ (-> clause (pad-clause) (expand-question-marks))))
 
 (defn process-where
