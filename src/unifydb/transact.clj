@@ -10,6 +10,7 @@
             [unifydb.messagequeue :as queue]
             [unifydb.service :as service]
             [unifydb.storage :as storage]
+            [unifydb.transact.filters :as filters]
             [unifydb.transact.transforms :as transforms])
   (:import [java.util UUID]))
 
@@ -67,9 +68,10 @@
         facts (resolve-temp-ids ids raw-facts)
         tx-id (get ids "unifydb.tx")
         ;; TODO get rest of conn info in :db-after
-        tx-report {:db-after (assoc {} :tx-id tx-id)
-                   :tx-data (vec facts)
-                   :tempids ids}]
+        tx-report (filters/apply-filters
+                   {:db-after (assoc {} :tx-id tx-id)
+                    :tx-data (vec facts)
+                    :tempids ids})]
     (storage/transact-facts! storage-backend facts)
     tx-report))
 
