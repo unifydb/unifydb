@@ -9,7 +9,8 @@
                                    fact-added?]]
             [unifydb.messagequeue :as queue]
             [unifydb.service :as service]
-            [unifydb.storage :as storage])
+            [unifydb.storage :as storage]
+            [unifydb.transact.transforms :as transforms])
   (:import [java.util UUID]))
 
 (defn make-new-tx-facts
@@ -60,7 +61,8 @@
   "Does all necessary processing of `tx-data` and sends it off to the storage backend."
   [storage-backend tx-data]
   (let [with-tx (into tx-data (make-new-tx-facts))
-        raw-facts (process-tx-data with-tx)
+        transformed (transforms/apply-transforms with-tx)
+        raw-facts (process-tx-data transformed)
         ids (gen-temp-ids storage-backend raw-facts)
         facts (resolve-temp-ids ids raw-facts)
         tx-id (get ids "unifydb.tx")
