@@ -33,7 +33,7 @@
    tx-data))
 
 (defn gen-temp-ids
-  "Returns a map of temporray ids to actual database ids based on the facts"
+  "Returns a map of temporary ids to actual database ids based on the facts"
   [storage-backend facts]
   (reduce
    (fn [ids fact]
