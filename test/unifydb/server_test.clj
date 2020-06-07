@@ -92,16 +92,17 @@
                        (filter #(= :unifydb/txInstant (second %)) v)
                        (first v)
                        (nth v 2))]
-      (is (= response {:status 200
-                       :headers {"Content-Type" "application/edn"}
-                       :body (pr-str {:db-after {:tx-id 3}
-                                      :tx-data [[1 :name "Ben Bitdiddle" 3 true]
-                                                [2 :name "Alyssa P. Hacker" 3 true]
-                                                [2 :supervisor 1 3 true]
-                                                [3 :unifydb/txInstant tx-instant 3 true]]
-                                      :tempids {"ben" 1
-                                                "alyssa" 2
-                                                "unifydb.tx" 3}})}))))
+      (is (= (:status response) 200))
+      (is (= (:headers response) {"Content-Type" "application/edn"}))
+      (is (= (edn/read-string (:body response))
+             {:db-after {:tx-id 3}
+              :tx-data [[1 :name "Ben Bitdiddle" 3 true]
+                        [2 :name "Alyssa P. Hacker" 3 true]
+                        [2 :supervisor 1 3 true]
+                        [3 :unifydb/txInstant tx-instant 3 true]]
+              :tempids {"ben" 1
+                        "alyssa" 2
+                        "unifydb.tx" 3}}))))
   (testing "/transact (JSON)"
     (let [response (make-request
                     {:request-method :post
@@ -118,14 +119,14 @@
                        (filter #(= ":unifydb/txInstant" (second %)) v)
                        (first v)
                        (nth v 2))]
-      (is (= response {:status 200
-                       :headers {"Content-Type" "application/json"}
-                       :body (json/write-str
-                              {":db-after" {":tx-id" 6}
-                               ":tx-data" [[4 ":name" "Ben Bitdiddle" 6 true]
-                                           [5 ":name" "Alyssa P. Hacker" 6 true]
-                                           [5 ":supervisor" 4 6 true]
-                                           [6 ":unifydb/txInstant" tx-instant 6 true]]
-                               ":tempids" {"ben" 4
-                                           "alyssa" 5
-                                           "unifydb.tx" 6}})})))))
+      (is (= (:status response) 200))
+      (is (= (:headers response) {"Content-Type" "application/json"}))
+      (is (= (json/read-str (:body response))
+             {":db-after" {":tx-id" 6}
+              ":tx-data" [[4 ":name" "Ben Bitdiddle" 6 true]
+                          [5 ":name" "Alyssa P. Hacker" 6 true]
+                          [5 ":supervisor" 4 6 true]
+                          [6 ":unifydb/txInstant" tx-instant 6 true]]
+              ":tempids" {"ben" 4
+                          "alyssa" 5
+                          "unifydb.tx" 6}})))))

@@ -9,7 +9,9 @@
                                    fact-added?]]
             [unifydb.messagequeue :as queue]
             [unifydb.service :as service]
-            [unifydb.storage :as storage])
+            [unifydb.storage :as storage]
+            [unifydb.transact.filters :as filters]
+            [unifydb.transact.transforms :as transforms])
   (:import [java.util UUID]))
 
 (defn make-new-tx-facts
@@ -31,7 +33,7 @@
    tx-data))
 
 (defn gen-temp-ids
-  "Returns a map of temporray ids to actual database ids based on the facts"
+  "Returns a map of temporary ids to actual database ids based on the facts"
   [storage-backend facts]
   (reduce
    (fn [ids fact]
@@ -60,14 +62,16 @@
   "Does all necessary processing of `tx-data` and sends it off to the storage backend."
   [storage-backend tx-data]
   (let [with-tx (into tx-data (make-new-tx-facts))
-        raw-facts (process-tx-data with-tx)
+        transformed (transforms/apply-transforms with-tx)
+        raw-facts (process-tx-data transformed)
         ids (gen-temp-ids storage-backend raw-facts)
         facts (resolve-temp-ids ids raw-facts)
         tx-id (get ids "unifydb.tx")
         ;; TODO get rest of conn info in :db-after
-        tx-report {:db-after (assoc {} :tx-id tx-id)
-                   :tx-data (vec facts)
-                   :tempids ids}]
+        tx-report (filters/apply-filters
+                   {:db-after (assoc {} :tx-id tx-id)
+                    :tx-data (vec facts)
+                    :tempids ids})]
     (storage/transact-facts! storage-backend facts)
     tx-report))
 

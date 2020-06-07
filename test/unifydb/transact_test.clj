@@ -5,8 +5,9 @@
                                    fact-attribute]]
             [unifydb.messagequeue.memory :as memq]
             [unifydb.service :as service]
-            [unifydb.transact :as t]
-            [unifydb.storage.memory :as memstore]))
+            [unifydb.storage :as storage]
+            [unifydb.storage.memory :as memstore]
+            [unifydb.transact :as t]))
 
 (deftest transact-test
   (let [queue-backend (memq/new)
@@ -37,5 +38,39 @@
           (is (>= (System/currentTimeMillis) (fact-value (last facts)))))
         (testing "Returning a new DB"
           (is (= (get tempids "unifydb.tx") (:tx-id db-after)))))
+      (finally
+        (service/stop! transact-service)))))
+
+(deftest transact-user-test
+  (let [queue-backend (memq/new)
+        store (memstore/new)
+        transact-service (t/new queue-backend store)]
+    (try
+      (service/start! transact-service)
+      (testing "Transact user - happy path"
+        (let [tx-data [[:unifydb/add "my-user" :unifydb/username "user"]
+                       [:unifydb/add "my-user" :unifydb/password "pencil"]]
+              tx-report (:tx-report @(t/transact queue-backend tx-data))
+              tx-id (:tx-id (:db-after tx-report))
+              facts (:tx-data tx-report)
+              stored-facts (storage/fetch-facts store '[_ _] tx-id {})]
+          (is (= (count facts) 2))
+          (is (= "user" (fact-value
+                         (first
+                          (filter
+                           (comp #{:unifydb/username}
+                                 fact-attribute)
+                           facts)))))
+          (is (= (fact-value (first facts)) "user"))
+          (is (= 5 (count (filter (comp #{:unifydb/username
+                                          :unifydb/salt
+                                          :unifydb/i
+                                          :unifydb/server-key
+                                          :unifydb/stored-key}
+                                        fact-attribute)
+                                  stored-facts))))
+          (is (= 0 (count (filter (comp #{:unifydb/password}
+                                        fact-attribute)
+                                  stored-facts))))))
       (finally
         (service/stop! transact-service)))))
