@@ -11,7 +11,8 @@
             [unifydb.service :as service]
             [unifydb.storage :as store]
             [unifydb.unify :as unify]
-            [unifydb.util :as util]))
+            [unifydb.util :as util])
+  (:import [clojure.lang ExceptionInfo]))
 
 (declare qeval do-query)
 
@@ -316,28 +317,19 @@
        (vec (binding/instantiate frame processed-find (fn [v _f] v))))
      (qeval db processed-where processed-rules [{}]))))
 
-(defn query-results
-  "Runs the query `q` against `db`, wrapping the results in a map with
-  either the keys :results or :error."
-  [db q]
-  (try
-    {:results (do-query db q)}
-    (catch Exception e
-      (if-let [data (ex-data e)]
-        {:error data}
-        (throw e)))))
-
 (defn query-callback [queue-backend storage-backend msg]
+  (log/debug "Received query message" :message msg)
   (let [db (-> (:db msg)
                (assoc :queue-backend queue-backend)
-               (assoc :storage-backend storage-backend))]
-    (log/debug "Received query message" :message msg)
-    (as-> (query-results db (:query msg)) v
-      (assoc v
-             :id (:id msg)
-             :db (:db msg)
-             :query (:query msg))
-      (queue/publish queue-backend :query/results v))))
+               (assoc :storage-backend storage-backend))
+        result (assoc (try
+                        {:results (do-query db (:query msg))}
+                        (catch ExceptionInfo e
+                          {:error (ex-data e)}))
+                      :id (:id msg)
+                      :db (:db msg)
+                      :query (:query msg))]
+    (queue/publish queue-backend :query/results result)))
 
 (defrecord QueryService [queue-backend storage-backend state]
   service/IService
