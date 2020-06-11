@@ -48,6 +48,4 @@
     (as-> results v
       (s/filter #(= (:id %) id) v)
       (s/take! v)
-      (d/chain v
-               #(assoc {} :results (:results %))
-               #(do (s/close! results) %)))))
+      (d/chain v #(do (s/close! results) %)))))

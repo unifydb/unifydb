@@ -219,6 +219,26 @@
                                :where [[?e :job ?job]
                                        [(some #{:computer} ?job)]
                                        [?e :name ?name]
+                                       [(!= "Ben Bitdiddle" ?name)]]}))))
+        (is (= {:code :unbound-variable
+                :variable "joob"
+                :message "Unbound variable joob"}
+               (:error
+                @(util/query queue-backend
+                             {:tx-id 4}
+                             '{:find [?e]
+                               :where [[?e :job ?job]
+                                       [(some #{:computer} ?joob)]
+                                       [?e :name ?name]
                                        [(!= "Ben Bitdiddle" ?name)]]})))))
+      (is (= {:code :unknown-predicate
+              :predicate "foo"
+              :message "Unknown predicate foo"}
+             (:error
+              @(util/query queue-backend
+                           {:tx-id 4}
+                           '{:find [?e]
+                             :where [[?e :salary ?s]
+                                     [(foo 50000 ?s 70000)]]}))))
       (finally
         (service/stop! query-service)))))

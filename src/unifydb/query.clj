@@ -75,10 +75,24 @@
   [_db pred args _rules frames]
   (mapcat
    (fn [frame]
-     (let [instantiated (binding/instantiate frame args (fn [v _f] v))
+     (let [instantiated (binding/instantiate
+                         frame args
+                         (fn [v _f]
+                           (let [var (second v)
+                                 msg (format "Unbound variable %s" var)]
+                             (throw (ex-info msg
+                                             {:code :unbound-variable
+                                              :variable (str var)
+                                              :message msg})))))
            operator (or (safe-ns-resolve 'clojure.core pred)
                         (match pred
-                          '!= not=))]
+                          '!= not=
+                          other (let [msg (format "Unknown predicate %s"
+                                                  other)]
+                                  (throw (ex-info msg
+                                                  {:code :unknown-predicate
+                                                   :predicate (str other)
+                                                   :message msg})))))]
        (if (apply operator instantiated)
          [frame]
          [])))
@@ -290,8 +304,8 @@
    rules))
 
 (defn do-query
-  "Runs the query `q` against `db`, returning a seq of
-   frames with variables bindings."
+  "Runs the query `q` against `db`, returning a seq of instantiated
+  find clauses for each frame"
   [db q]
   (let [{:keys [find where rules]} q
         processed-where (process-where where)
@@ -302,14 +316,28 @@
        (vec (binding/instantiate frame processed-find (fn [v _f] v))))
      (qeval db processed-where processed-rules [{}]))))
 
+(defn query-results
+  "Runs the query `q` against `db`, wrapping the results in a map with
+  either the keys :results or :error."
+  [db q]
+  (try
+    {:results (do-query db q)}
+    (catch Exception e
+      (if-let [data (ex-data e)]
+        {:error data}
+        (throw e)))))
+
 (defn query-callback [queue-backend storage-backend msg]
   (let [db (-> (:db msg)
                (assoc :queue-backend queue-backend)
                (assoc :storage-backend storage-backend))]
     (log/debug "Received query message" :message msg)
-    (->> (do-query db (:query msg))
-         (assoc msg :results)
-         (queue/publish queue-backend :query/results))))
+    (as-> (query-results db (:query msg)) v
+      (assoc v
+             :id (:id msg)
+             :db (:db msg)
+             :query (:query msg))
+      (queue/publish queue-backend :query/results v))))
 
 (defrecord QueryService [queue-backend storage-backend state]
   service/IService
