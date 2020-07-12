@@ -57,9 +57,9 @@
                                               server-nonce
                                               salt
                                               i)
-                         response-fields (assoc auth-fields
-                                                :s2s "step2"
-                                                :s2c (scram/encode response-str))]
+                         response-fields {:s2s "step2"
+                                          :s2c (scram/encode response-str)
+                                          :c2c (or (:c2c auth-fields) "")}]
                      {:status 401
                       :headers {"WWW-Authenticate"
                                 (format "SASL %s"
