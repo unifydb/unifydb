@@ -1,5 +1,5 @@
 (ns unifydb.storage.memory-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [clojure.test :refer [deftest is testing]]
             [unifydb.storage.memory :as mem]
             [unifydb.storage :as store]))
 
@@ -69,6 +69,24 @@
               :tx-id 3
               :frame {}
               :expected [[2 :address [:cambridge [:mass :ave] 78] 2 true]
-                         [2 :address [:cambridge [:mass :ave] 78] 3 false]]}]]
-      (is (= (store/fetch-facts db query tx-id frame)
-             expected)))))
+                         [2 :address [:cambridge [:mass :ave] 78] 3 false]]}
+             {:query '[2 :address [? v]]
+              :tx-id :latest
+              :frame {}
+              :expected [[2 :address [:cambridge [:mass :ave] 78] 2 true]
+                         [2 :address [:cambridge [:mass :ave] 78] 3 false]]}
+             {:query '[[? e] [? a] [? v]]
+              :tx-id :latest
+              :frame {}
+              :expected [[1 :job [:computer :wizard] 0 true]          
+                         [1 :name "Ben Bitdiddle" 0 true]
+                         [1 :salary 60000 1 true]
+                         [2 :address [:cambridge [:mass :ave] 78] 2 true]
+                         [2 :address [:cambridge [:mass :ave] 78] 3 false]
+                         [2 :job [:computer :programmer] 2 true]
+                         [2 :name "Alyssa P. Hacker" 1 true]
+                         [2 :salary 40000 2 true]
+                         [2 :supervisor 1 2 true]]}]]
+      (testing {:query query :tx-id tx-id :frame frame}
+        (is (= expected
+               (store/fetch-facts db query tx-id frame)))))))
