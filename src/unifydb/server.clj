@@ -8,6 +8,7 @@
             [manifold.deferred :as d]
             [ring.util.request :as request]
             [taoensso.timbre :as log]
+            [unifydb.http-auth :as auth]
             [unifydb.service :as service]
             [unifydb.transact :as transact]
             [unifydb.util :as util])
@@ -76,6 +77,7 @@
   (compojure/routes
    (POST "/query" _request (query queue-backend))
    (POST "/transact" _request (transact queue-backend))
+   (POST "/auth" _request (auth/auth-exchange queue-backend))
    (route/not-found
     {:body {:message "These aren't the droids you're looking for."}})))
 
