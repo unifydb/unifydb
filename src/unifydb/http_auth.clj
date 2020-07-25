@@ -11,6 +11,7 @@
   [header]
   (as-> (str/split header #" ") v
     (second v)
+    (or v "")
     (str/split v #",")
     (filter #(str/includes? % "=") v)
     (map #(str/split % #"=") v)
