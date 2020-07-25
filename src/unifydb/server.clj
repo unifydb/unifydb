@@ -77,7 +77,7 @@
   (compojure/routes
    (POST "/query" _request (query queue-backend))
    (POST "/transact" _request (transact queue-backend))
-   (POST "/auth" _request (auth/auth-exchange queue-backend))
+   (POST "/auth" _request (auth/auth-exchange! queue-backend))
    (route/not-found
     {:body {:message "These aren't the droids you're looking for."}})))
 
