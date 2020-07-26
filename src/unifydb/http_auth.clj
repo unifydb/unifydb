@@ -32,9 +32,9 @@
   (let [scram-fields (-> (scram/decode (:c2s auth-fields))
                          (slurp)
                          (auth-fields->map))
-        client-proof (-> (:p scram-fields)
-                         (scram/decode)
-                         (slurp))]))
+        _client-proof (-> (:p scram-fields)
+                          (scram/decode)
+                          (slurp))]))
 
 (defn c2s-fields
   "Given the raw auth header fields, returns the client-to-server
