@@ -9,9 +9,7 @@
 (defn auth-fields->map
   "Parses HTTP Authentication header fields into a map."
   [header]
-  (as-> (str/split header #" ") v
-    (second v)
-    (or v "")
+  (as-> header v
     (str/split v #",")
     (filter #(str/includes? % "=") v)
     (map #(str/split % #"=") v)
@@ -27,21 +25,28 @@
        (map (partial str/join "="))
        (str/join ",")))
 
+(defn strip-sasl-prefix
+  "Given a SASL auth header string, strip the \"SASL \" prefix."
+  [header]
+  (second (str/split header #" " 2)))
+
 (defn auth-step-2
   [auth-fields]
   (let [scram-fields (-> (scram/decode (:c2s auth-fields))
                          (slurp)
+                         (strip-sasl-prefix)
                          (auth-fields->map))
         _client-proof (-> (:p scram-fields)
                           (scram/decode)
                           (slurp))]))
 
 (defn c2s-fields
-  "Given the raw auth header fields, returns the client-to-server
-  fields as a map."
+  "Given the raw auth header fields as a map, returns the
+  client-to-server fields as a map."
   [raw-fields]
   (-> (scram/decode (:c2s raw-fields))
       (slurp)
+      (strip-sasl-prefix)
       (auth-fields->map)))
 
 (defn list->map
@@ -80,7 +85,9 @@
   [queue-backend]
   (fn [request]
     (if-let [auth-header (get-in request [:headers "authorization"])]
-      (let [auth-fields (auth-fields->map auth-header)]
+      (let [auth-fields (-> auth-header
+                            (strip-sasl-prefix)
+                            (auth-fields->map))]
         (if (= (:s2s auth-fields) "step2")
           (auth-step-2 auth-fields)
           (let [c2s (c2s-fields auth-fields)

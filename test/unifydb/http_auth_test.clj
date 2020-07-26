@@ -8,32 +8,24 @@
 (defn not-includes? [subs s]
   (not (s/includes? s subs)))
 
+(def auth-field-str
+  "A generator for valid components of a SASL header"
+  (gen/such-that (every-pred not-empty
+                             (partial not-includes? "%")
+                             (partial not-includes? " ")
+                             (partial not-includes? ",")
+                             (partial not-includes? "="))
+                 gen/string-alphanumeric
+                 50))
 
 (deftest auth-fields->map
-  (checking "that auth-fields->map parses the SAML header" 100
+  (checking "that auth-fields->map parses the SASL header" 100
     [v (gen/let [n gen/nat
-                 keys (gen/vector-distinct
-                       (gen/such-that (every-pred not-empty
-                                                  (partial not-includes? "%")
-                                                  (partial not-includes? " ")
-                                                  (partial not-includes? ",")
-                                                  (partial not-includes? "="))
-                                      gen/string
-                                      50)
-                       {:num-elements n})
-                 vals (gen/vector
-                       (gen/such-that (every-pred not-empty
-                                                  (partial not-includes? "%")
-                                                  (partial not-includes? " ")
-                                                  (partial not-includes? ",")
-                                                  (partial not-includes? "="))
-                                      gen/string
-                                      50)
-                       n)
-                 fmt-str (gen/return (str "SASL "
-                                          (s/join ","
-                                                  (map (partial format "%s=%%s")
-                                                       keys))))]
+                 keys (gen/vector-distinct auth-field-str {:num-elements n})
+                 vals (gen/vector auth-field-str n)
+                 fmt-str (gen/return
+                          (s/join "," (map (partial format "%s=%%s")
+                                           keys)))]
          (gen/return
           {:n n
            :header (apply format fmt-str vals)
