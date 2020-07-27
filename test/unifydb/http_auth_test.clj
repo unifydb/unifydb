@@ -5,16 +5,10 @@
             [com.gfredericks.test.chuck.clojure-test :refer [checking]]
             [unifydb.http-auth :as auth]))
 
-(defn not-includes? [subs s]
-  (not (s/includes? s subs)))
-
 (def auth-field-str
   "A generator for valid components of a SASL header"
   (gen/such-that (every-pred not-empty
-                             (partial not-includes? "%")
-                             (partial not-includes? " ")
-                             (partial not-includes? ",")
-                             (partial not-includes? "="))
+                             (complement (partial re-find #"%| |,|=")))
                  gen/string-alphanumeric
                  50))
 
@@ -52,7 +46,7 @@
 (deftest strip-sasl-prefix
   (checking "that strip-sasl-prefix strips the prefix" 100
     [v (gen/let [prefix (gen/such-that
-                         (partial not-includes? " ")
+                         (complement (partial re-find #" "))
                          gen/string-alphanumeric)
                  suffix gen/string-alphanumeric]
          (gen/return {:suffix suffix
