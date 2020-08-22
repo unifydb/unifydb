@@ -3,7 +3,8 @@
             [clojure.test :refer [deftest is]]
             [clojure.test.check.generators :as gen]
             [com.gfredericks.test.chuck.clojure-test :refer [checking]]
-            [unifydb.http-auth :as auth]))
+            [unifydb.http-auth :as auth]
+            [clojure.string :as str]))
 
 (def auth-field-str
   "A generator for valid components of a SASL header"
@@ -67,3 +68,18 @@
       (is (= (count m) (count l)))
       (is (= (frequencies (keys m)) (frequencies (take (count l) ks))))
       (is (= (frequencies (vals m)) (frequencies l))))))
+
+(deftest server-first-message
+  (checking "that server-first-message returns a valid auth string" 100
+    [c2c (gen/one-of [(gen/return nil) auth-field-str])
+     server-nonce auth-field-str
+     i (gen/one-of [(gen/return nil) gen/small-integer])
+     salt (gen/one-of [(gen/return nil) auth-field-str])]
+    (let [msg (auth/server-first-message {:c2c c2c} server-nonce i salt)]
+      (if-not (and i salt)
+        (is (= msg {:status 401 :body "Invalid credentials"}))
+        (let [{:keys [status headers]} msg
+              auth (get headers "WWW-Authenticate")]
+          (is (= status 401))
+          (is (str/includes? auth "s2s=step2"))
+          (when c2c (is (str/includes? auth (format "c2c=%s" c2c)))))))))

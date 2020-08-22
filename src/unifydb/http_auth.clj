@@ -72,13 +72,34 @@
                                  [?uid :unifydb/i ?i]
                                  [?uid :unifydb/salt ?s]]})
            first
-           (partial list->map [:i :salt])))
+           (partial list->map [:i :salt])
+           #(assoc % :salt
+                   (when (:salt %)
+                     (slurp (scram/decode (:salt %)))))))
 
 (defn format-salt-and-i
   "Returns the `salt`, `i`, and `server-nonce` in the right format for
   HTTP transfer."
   [server-nonce salt i]
   (format "r=%s,s=%s,i=%s" server-nonce salt i))
+
+(defn server-first-message [auth-fields server-nonce i salt]
+  (if-not (and i salt)
+    {:status 401
+     :body "Invalid credentials"}
+    (->> [i salt]
+         (apply (partial format-salt-and-i server-nonce))
+         (scram/encode)
+         ((fn [s2c]
+            {:s2s "step2"
+             :s2c s2c}))
+         ((fn [fields]
+            (into fields (when-let [c2c (:c2c auth-fields)]
+                           [[:c2c c2c]]))))
+         map->auth-fields
+         (format "SASL %s")
+         (assoc {} "WWW-Authenticate")
+         (assoc {:status 401} :headers))))
 
 (defn auth-exchange!
   "The handler function for the auth endpoint."
@@ -100,25 +121,10 @@
                 :body "Missing required SCRAM fields \"n\" and \"r\""})
               (d/chain (get-i-and-salt! queue-backend username)
                        (juxt :i :salt)
-                       (fn [[i salt]]
-                         (if-not (and i salt)
-                           (d/success-deferred
-                            {:status 401
-                             :body "Invalid credentials"})
-                           (format-salt-and-i server-nonce salt i)))
-                       scram/encode
-                       (fn [encoded-s2c]
-                         {:s2s "step2"
-                          :s2c encoded-s2c})
-                       (fn [response-fields]
-                         (if (:c2c auth-fields)
-                           (assoc response-fields :c2c (:c2c auth-fields))
-                           response-fields))
-                       (fn [response-fields]
-                         {:status 401
-                          :headers {"WWW-Authenticate"
-                                    (format "SASL %s"
-                                            (map->auth-fields response-fields))}}))))))
+                       (partial apply
+                                (partial server-first-message
+                                         auth-fields
+                                         server-nonce)))))))
       (d/success-deferred
        {:status 401
         :body "Authorization header required"}))))
