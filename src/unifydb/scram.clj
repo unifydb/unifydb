@@ -72,9 +72,15 @@
 (defn encode
   "Base64-encodes `to-encode`, returning a string."
   [to-encode]
-  (.encodeToString (Base64/getEncoder) to-encode))
+  (let [to-encode (if (string? to-encode)
+                    (.getBytes to-encode)
+                    to-encode)]
+    (.encodeToString (Base64/getEncoder) to-encode)))
 
 (defn decode
   "Base64-decodes the encoded string `to-decode`, returning a byte array."
   [to-decode]
-  (.decode (Base64/getDecoder) to-decode))
+  (let [to-decode (if (bytes? to-decode)
+                    (slurp to-decode)
+                    to-decode)]
+    (.decode (Base64/getDecoder) to-decode)))
