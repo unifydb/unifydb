@@ -101,6 +101,18 @@
          (assoc {} "WWW-Authenticate")
          (assoc {:status 401} :headers))))
 
+(defn get-stored-key!
+  "Returns a deferred with the stored-key for the given username. If
+  no such stored-key exists, return nil."
+  [queue-backend username]
+  (d/chain (util/query queue-backend {:tx-id :latest}
+                       ;; TODO this should be parameterized too
+                       `{:find [?k]
+                         :where [[?uid :unifydb/username ~username]
+                                 [?uid :unifydb/stored-key ?k]]})
+           first
+           first))
+
 (defn auth-exchange!
   "The handler function for the auth endpoint."
   [queue-backend]
@@ -108,23 +120,30 @@
     (if-let [auth-header (get-in request [:headers "authorization"])]
       (let [auth-fields (-> auth-header
                             (strip-sasl-prefix)
-                            (auth-fields->map))]
-        (if (= (:s2s auth-fields) "step2")
-          (auth-step-2 auth-fields)
-          (let [c2s (c2s-fields auth-fields)
-                username (:u c2s)
-                nonce (:r c2s)
-                server-nonce (str nonce (rand/hex 12))]
-            (if-not (and username nonce)
-              (d/success-deferred
-               {:status 401
-                :body "Missing required SCRAM fields \"n\" and \"r\""})
-              (d/chain (get-i-and-salt! queue-backend username)
-                       (juxt :i :salt)
-                       (partial apply
-                                (partial server-first-message
-                                         auth-fields
-                                         server-nonce)))))))
+                            (auth-fields->map))
+            c2s (c2s-fields auth-fields)
+            username (:u c2s)
+            nonce (:r c2s)]
+        (cond
+          (not (and username nonce)) (d/success-deferred
+                                      {:status 401
+                                       :body "Missing required SCRAM fields \"n\" and \"r\""})
+          (= (:s2s auth-fields) "step2")
+          (d/let-flow [scram-fields (-> (scram/decode (:c2s auth-fields))
+                                        (slurp)
+                                        (auth-fields->map))
+                       client-proof (-> (:p scram-fields)
+                                        (scram/decode))
+                       stored-key (get-stored-key! queue-backend username)
+                       client-signature :TODO
+                       client-key (scram/bit-xor-array client-proof client-signature)
+                       valid (= (scram/hash-sha256 client-key) stored-key)
+                       server-signature :TODO]
+                      :TODO-CONSTRUCT-RESPONSE-VALUE)
+          :else
+          (d/let-flow [server-nonce (str nonce (rand/hex 12))
+                       {:keys [i salt]} (get-i-and-salt! queue-backend username)]
+                      (server-first-message auth-fields server-nonce i salt))))
       (d/success-deferred
        {:status 401
         :body "Authorization header required"}))))
