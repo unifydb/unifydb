@@ -3,8 +3,7 @@
             [clojure.test :refer [deftest is]]
             [clojure.test.check.generators :as gen]
             [com.gfredericks.test.chuck.clojure-test :refer [checking]]
-            [unifydb.http-auth :as auth]
-            [clojure.string :as str]))
+            [unifydb.http-auth :as auth]))
 
 (def auth-field-str
   "A generator for valid components of a SASL header"
@@ -81,5 +80,5 @@
         (let [{:keys [status headers]} msg
               auth (get headers "WWW-Authenticate")]
           (is (= status 401))
-          (is (str/includes? auth "s2s=step2"))
-          (when c2c (is (str/includes? auth (format "c2c=%s" c2c)))))))))
+          (is (s/includes? auth "s2s=step2"))
+          (when c2c (is (s/includes? auth (format "c2c=%s" c2c)))))))))
