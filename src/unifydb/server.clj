@@ -1,13 +1,18 @@
 (ns unifydb.server
   (:require [aleph.http :as http]
+            [cemerick.friend :as friend]
             [clojure.data.json :as json]
             [clojure.edn :as edn]
             [clojure.string :as string]
             [compojure.core :as compojure :refer [POST]]
             [compojure.route :as route]
             [manifold.deferred :as d]
+            [ring.middleware.keyword-params :as keyword-params]
+            [ring.middleware.nested-params :as nested-params]
+            [ring.middleware.params :as params]
             [ring.util.request :as request]
             [taoensso.timbre :as log]
+            [unifydb.auth :as auth]
             [unifydb.service :as service]
             [unifydb.transact :as transact]
             [unifydb.util :as util])
@@ -126,6 +131,13 @@
 (defn app [state]
   (let [{:keys [queue-backend]} @state]
     (-> (routes queue-backend)
+        (friend/authenticate {:workflows [(auth/jwt-workflow
+                                           :credential-fn auth/jwt-credential-fn)
+                                          (auth/login-workflow
+                                           :credential-fn auth/login-credential-fn)]})
+        (params/wrap-params)
+        (keyword-params/wrap-keyword-params)
+        (nested-params/wrap-nested-params)
         (wrap-logging)
         (wrap-content-type)
         (wrap-accept-type))))
