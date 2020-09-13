@@ -1,5 +1,6 @@
 (ns unifydb.auth
   (:require [buddy.sign.jwt :as jwt]
+            [cemerick.friend :as friend]
             [cemerick.friend.workflows :as workflows]
             [taoensso.timbre :as log]
             [unifydb.config :as config])
@@ -26,7 +27,7 @@
 (defn jwt-workflow [& {:keys [credential-fn]}]
   (fn [request]
     (let [credential-fn (or credential-fn
-                            (get-in request [:friend/auth-config
+                            (get-in request [::friend/auth-config
                                              :credential-fn]))
           jwt (get-jwt request)]
       (when (and credential-fn jwt)
