@@ -132,10 +132,11 @@
 (defn app [state]
   (let [{:keys [queue-backend]} @state]
     (-> (routes queue-backend)
-        (friend/authenticate {:workflows [(auth/jwt-workflow
-                                           :credential-fn auth/jwt-credential-fn)
-                                          (auth/login-workflow
-                                           :credential-fn auth/login-credential-fn)]})
+        (friend/authenticate
+         {:workflows [(auth/jwt-workflow
+                       :credential-fn auth/jwt-credential-fn)
+                      (auth/login-workflow
+                       :credential-fn auth/login-credential-fn)]})
         (params/wrap-params)
         (keyword-params/wrap-keyword-params)
         (nested-params/wrap-nested-params)
