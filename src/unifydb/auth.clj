@@ -1,5 +1,9 @@
 (ns unifydb.auth
-  (:require [cemerick.friend.workflows :as workflows]))
+  (:require [buddy.sign.jwt :as jwt]
+            [cemerick.friend.workflows :as workflows]
+            [taoensso.timbre :as log]
+            [unifydb.config :as config])
+  (:import [clojure.lang ExceptionInfo]))
 
 ;; Two workflows:
 ;; The first one checks for a JWT and verifies a timestamp-generated
@@ -15,12 +19,14 @@
 
 ;; TODO these need to handle deferreds
 
-(defn get-jwt [request])
+(defn get-jwt [request]
+  (when-let [auth-header (:authorization (:headers request))]
+    (second (re-matches #"^Bearer (.*)" auth-header))))
 
 (defn jwt-workflow [& {:keys [credential-fn]}]
   (fn [request]
     (let [credential-fn (or credential-fn
-                            (get-in request [::friend/auth-config
+                            (get-in request [:friend/auth-config
                                              :credential-fn]))
           jwt (get-jwt request)]
       (when (and credential-fn jwt)
@@ -29,7 +35,11 @@
 (defn jwt-credential-fn
   "Given the JWT, validates it, pulls out the user identity and roles
   and returns them in an auth-map."
-  [jwt])
+  [jwt]
+  (try
+    (jwt/unsign jwt (config/secret))
+    (catch ExceptionInfo e
+      (log/warn "Error unsigning JWT" :error (ex-data e)))))
 
 (defn login-workflow [& {:keys [credential-fn]}]
   (fn [request]))
