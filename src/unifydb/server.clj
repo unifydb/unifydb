@@ -13,6 +13,7 @@
             [ring.util.request :as request]
             [taoensso.timbre :as log]
             [unifydb.auth :as auth]
+            [unifydb.config :as config]
             [unifydb.service :as service]
             [unifydb.transact :as transact]
             [unifydb.util :as util])
@@ -146,9 +147,8 @@
   (let [server (:server @state)
         handler (app state)]
     (when server (.close server))
-    ;; TODO add config system and read port from config with default
     (swap! state #(assoc % :server
-                         (http/start-server handler {:port 8181})))))
+                         (http/start-server handler {:port (config/port)})))))
 
 (defn stop-server! [state]
   (let [server (:server @state)]
