@@ -43,7 +43,12 @@
   and returns them in an auth-map."
   [jwt]
   (try
-    (workflows/make-auth (jwt/unsign jwt (config/secret)))
+    (let [auth-map (jwt/unsign jwt (config/secret))]
+      (when (< (datetime/between (datetime/chrono-unit :seconds)
+                                 (datetime/utc-now)
+                                 (datetime/from-iso (:created auth-map)))
+               (config/token-ttl-seconds))
+        (workflows/make-auth auth-map)))
     (catch ExceptionInfo e
       (log/warn "Error unsigning JWT" :error (ex-data e)))))
 

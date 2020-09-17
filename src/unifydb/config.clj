@@ -23,3 +23,6 @@
 
 (defn port []
   (get env :port 8181))
+
+(defn token-ttl-seconds []
+  (get env :token-ttl-seconds 3600))
