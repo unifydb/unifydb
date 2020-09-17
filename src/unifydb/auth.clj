@@ -2,8 +2,13 @@
   (:require [buddy.sign.jwt :as jwt]
             [cemerick.friend :as friend]
             [cemerick.friend.workflows :as workflows]
+            [clojure.core.match :refer [match]]
+            [manifold.deferred :as d]
+            [ring.util.request :as req]
             [taoensso.timbre :as log]
-            [unifydb.config :as config])
+            [unifydb.config :as config]
+            [unifydb.datetime :as datetime]
+            [unifydb.user :as user])
   (:import [clojure.lang ExceptionInfo]))
 
 ;; Two workflows:
@@ -38,14 +43,41 @@
   and returns them in an auth-map."
   [jwt]
   (try
-    (jwt/unsign jwt (config/secret))
+    (workflows/make-auth (jwt/unsign jwt (config/secret)))
     (catch ExceptionInfo e
       (log/warn "Error unsigning JWT" :error (ex-data e)))))
 
-(defn login-workflow [& {:keys [credential-fn]}]
-  (fn [request]))
-
-(defn login-credential-fn
-  "Given the username and hashed password+nonce, verifies the user and
-  returns an auth-map with the user identity and any user roles."
-  [])
+;; TODO add a nonce to prevent replay attacks
+(defn login-workflow [queue-backend & {:keys [login-uri]
+                                       :or {login-uri "/authenticate"}}]
+  (fn [request]
+    (let [path (req/path-info request)
+          method (:method request)]
+      (match [method path]
+        [:get login-uri] (when-let [username (get (:params request)
+                                                  "username")]
+                           ;; TODO can this be a deferred?
+                           (d/let-flow [user (user/get-user! queue-backend
+                                                             {:tx-id :latest}
+                                                             username)]
+                             {:status 200
+                              :body {:username username
+                                     :salt (:unifydb/salt user)}}))
+        ;; TODO once caching layer is in place, cache user from first step
+        [:post login-uri]
+        (let [username (:username (:body request))
+              hashed-password (:password (:body request))]
+          ;; TODO can this be a deferred?
+          (when (and username hashed-password)
+            (d/let-flow [user (user/get-user! queue-backend
+                                              {:tx-id :latest}
+                                              username)]
+              (when (= hashed-password (:unifydb/password user))
+                {:status 200
+                 :body {:username username
+                        :token (jwt/sign {:username username
+                                          :roles []
+                                          :created (datetime/iso-format
+                                                    (datetime/utc-now))}
+                                         (config/secret))}}))))
+        :else nil))))

@@ -3,7 +3,9 @@
             [buddy.core.codecs :as codecs]
             [buddy.core.bytes :as bytes]
             [buddy.core.codecs.base64 :as base64]
-            [buddy.core.nonce :as nonce])
+            [buddy.core.nonce :as nonce]
+            [manifold.deferred :as d]
+            [unifydb.util :as util])
   (:import [java.security SecureRandom]))
 
 (defn make-user
@@ -18,3 +20,21 @@
       :unifydb/password (codecs/bytes->str (base64/encode hashed-pw))
       :unifydb/salt (codecs/bytes->str (base64/encode salt))}))
   ([username password] (make-user username password (SecureRandom.))))
+
+(defn get-user!
+  "Gets the user record denoted by `username`, returning a deferred"
+  [queue-backend db username]
+  (d/chain (util/query queue-backend
+                       db
+                       `{:find [?password ?salt]
+                         ;; TODO once queries support parameterization
+                         ;; remove this interpolation
+                         :where [[?e :unifydb/username ~username]
+                                 [?e :unifydb/password ?password]
+                                 [?e :unifydb/salt ?salt]]})
+           first
+           (fn [[password salt]]
+             (when (and password salt)
+               {:unifydb/username username
+                :unifydb/password password
+                :unifydb/salt salt}))))

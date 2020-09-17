@@ -135,8 +135,7 @@
         (friend/authenticate
          {:workflows [(auth/jwt-workflow
                        :credential-fn auth/jwt-credential-fn)
-                      (auth/login-workflow
-                       :credential-fn auth/login-credential-fn)]})
+                      (auth/login-workflow queue-backend)]})
         (params/wrap-params)
         (keyword-params/wrap-keyword-params)
         (nested-params/wrap-nested-params)
