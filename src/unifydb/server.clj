@@ -78,10 +78,16 @@
                :tx-report
                #(assoc {} :body %)))))
 
-(defn routes [queue-backend]
+(defn secure-routes [queue-backend]
   (compojure/routes
    (POST "/query" _request (query queue-backend))
-   (POST "/transact" _request (transact queue-backend))
+   (POST "/transact" _request (transact queue-backend))))
+
+(defn routes [queue-backend]
+  (compojure/routes
+   (friend/wrap-authorize
+    (secure-routes queue-backend)
+    #{:unifydb/user})
    (route/not-found
     {:body {:message "These aren't the droids you're looking for."}})))
 
@@ -135,7 +141,9 @@
         (friend/authenticate
          {:workflows [(auth/jwt-workflow
                        :credential-fn auth/jwt-credential-fn)
-                      (auth/login-workflow queue-backend)]})
+                      (auth/login-workflow queue-backend)]
+          :unauthenticated-handler auth/not-authenticated
+          :unauthorized-handler auth/not-authorized})
         (params/wrap-params)
         (keyword-params/wrap-keyword-params)
         (nested-params/wrap-nested-params)

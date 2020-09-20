@@ -81,8 +81,16 @@
                 {:status 200
                  :body {:username username
                         :token (jwt/sign {:username username
-                                          :roles []
+                                          ;; TODO get roles
+                                          :roles [:unifydb/user]
                                           :created (datetime/iso-format
                                                     (datetime/utc-now))}
                                          (config/secret))}}))))
         :else nil))))
+
+(defn not-authorized [_request]
+  {:status 403 :body "Access denied"})
+
+(defn not-authenticated [_request]
+  ;; TODO add WWW-Authenticate header
+  {:status 401 :body "Access denied"})
