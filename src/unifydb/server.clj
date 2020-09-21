@@ -93,18 +93,19 @@
 
 (defn wrap-content-type [handler]
   (fn [request]
-    (let [content-type (request/content-type request)
-          body (condp = (string/lower-case content-type)
-                 "application/json" (-> (request/body-string request)
-                                        (json/read-str)
-                                        (json->edn))
-                 "application/edn" (edn/read-string (request/body-string request))
-                 :unsupported)]
-      (if (= :unsupported body)
-        (d/success-deferred
-         {:status 400
-          :body {:message (str "Unsupported content type " content-type)}})
-        (handler (assoc request :body body))))))
+    (if-let [content-type (request/content-type request)]
+      (let [body (condp = (string/lower-case content-type)
+                   "application/json" (-> (request/body-string request)
+                                          (json/read-str)
+                                          (json->edn))
+                   "application/edn" (edn/read-string (request/body-string request))
+                   :unsupported)]
+        (if (= :unsupported body)
+          (d/success-deferred
+           {:status 400
+            :body {:message (str "Unsupported content type " content-type)}})
+          (handler (assoc request :body body))))
+      (handler request))))
 
 (defn wrap-accept-type [handler]
   (fn [request]
@@ -115,6 +116,7 @@
                                                  (json/write-str))
                                         :type "application/json"}
                     "application/edn" {:fn pr-str :type "application/edn"}
+                    "*/*" {:fn pr-str :type "application/edn"}
                     {:error (format "Unsupported accept type %s" accept-type)})]
       (if (:error wrapper)
         (d/success-deferred {:status 400
