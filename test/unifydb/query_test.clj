@@ -242,3 +242,33 @@
                                      [(foo 50000 ?s 70000)]]}))))
       (finally
         (service/stop! query-service)))))
+
+(deftest parameterization
+  (let [facts [[1 :name "Ben Bitdiddle" 0 true]
+               [1 :job [:computer :wizard] 0 true]
+               [1 :salary 60000 1 true]
+               [2 :name "Alyssa P. Hacker" 1 true]
+               [2 :job [:computer :programmer] 2 true]
+               [2 :salary 40000 2 true]
+               [2 :supervisor 1 2 true]
+               [1 :address [:slumerville [:ridge :road] 10] 2 true]
+               [2 :address [:cambridge [:mass :ave] 78] 2 true]
+               [2 :address [:cambridge [:mass :ave] 78] 3 false]
+               [3 :address [:slumerville [:davis :square] 42] 4 true]]
+        storage-backend (store/transact-facts! (memstore/new) facts)
+        queue-backend (memqueue/new)
+        query-service (query/new queue-backend storage-backend)
+        db-latest {:tx-id :latest}]
+    (try
+      (service/start! query-service)
+      (doseq [{:keys [query db expected]}
+              [{:query '{:find [?e]
+                         :where [[?e :name ?name]]
+                         :bind {name "Ben Bitdiddle"}}
+                :db db-latest
+                :expected '[[1]]}]]
+        (testing (str query)
+          (is (= (:results @(util/query queue-backend db query))
+                 expected))))
+      (finally
+        (service/stop! query-service)))))

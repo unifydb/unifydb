@@ -304,18 +304,25 @@
          [:and ~@(map process-clause (rest rule))]]))
    rules))
 
+(defn process-bind
+  "Processes the bind clause by transforming it into a map.
+  `bind` must be a map or a sequence of pairs."
+  [bind]
+  (into {} bind))
+
 (defn do-query
   "Runs the query `q` against `db`, returning a seq of instantiated
   find clauses for each frame"
   [db q]
-  (let [{:keys [find where rules]} q
+  (let [{:keys [find where rules bind]} q
         processed-where (process-where where)
         processed-find (vec (expand-question-marks find))
-        processed-rules (process-rules rules)]
+        processed-rules (process-rules rules)
+        processed-bind (process-bind bind)]
     (map
      (fn [frame]
        (vec (binding/instantiate frame processed-find (fn [v _f] v))))
-     (qeval db processed-where processed-rules [{}]))))
+     (qeval db processed-where processed-rules [processed-bind]))))
 
 (defn query-callback [queue-backend storage-backend msg]
   (log/debug "Received query message" :message msg)
