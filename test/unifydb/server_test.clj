@@ -147,9 +147,12 @@
                                                      :where [[?thing :id "foo-thing"]
                                                              [?thing :foo ?foo]]})})]
         (is (= 401 (:status response)))))
-    (testing "login GET request"
+    (testing "authenticate GET request"
       (let [response (make-request {:request-method :get
-                                    :uri "/login?username=ben"
+                                    :uri "/authenticate"
+                                    :query-string "username=ben"
                                     :headers {"accept" "application/edn"}})]
-        (is (= "ben" (:username response)))
-        (is (not (nil? (:salt response))))))))
+        (is (= 200 (:status response)))
+        (is (= "ben" (:username (edn/read-string (:body response)))))
+        (is (not (nil? (:salt (edn/read-string (:body response))))))
+        (is (string? (:salt (edn/read-string (:body response)))))))))

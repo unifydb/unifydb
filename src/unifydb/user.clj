@@ -26,12 +26,15 @@
   [queue-backend db username]
   (d/chain (util/query queue-backend
                        db
-                       `{:find [?password ?salt]
+                       `{:find [?password# ?salt#]
                          ;; TODO once queries support parameterization
-                         ;; remove this interpolation
-                         :where [[?e :unifydb/username ~username]
-                                 [?e :unifydb/password ?password]
-                                 [?e :unifydb/salt ?salt]]})
+                         ;; remove this gross interpolation
+                         ;; DO NOT MERGE until parameterization is
+                         ;; implemented
+                         :where [[?e# :unifydb/username ~username]
+                                 [?e# :unifydb/password ?password#]
+                                 [?e# :unifydb/salt ?salt#]]})
+           :results
            first
            (fn [[password salt]]
              (when (and password salt)

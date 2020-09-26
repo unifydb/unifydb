@@ -57,35 +57,34 @@
                                        :or {login-uri "/authenticate"}}]
   (fn [request]
     (let [path (req/path-info request)
-          method (:method request)]
+          method (:request-method request)]
       (match [method path]
-        [:get login-uri] (when-let [username (get (:params request)
-                                                  "username")]
-                           ;; TODO can this be a deferred?
-                           (d/let-flow [user (user/get-user! queue-backend
-                                                             {:tx-id :latest}
-                                                             username)]
-                             {:status 200
-                              :body {:username username
-                                     :salt (:unifydb/salt user)}}))
+        [:get login-uri]
+        (when-let [username (get (:params request)
+                                 "username")]
+          @(d/let-flow [user (user/get-user! queue-backend
+                                             {:tx-id :latest}
+                                             username)]
+             {:status 200
+              :body {:username username
+                     :salt (:unifydb/salt user)}}))
         ;; TODO once caching layer is in place, cache user from first step
         [:post login-uri]
         (let [username (:username (:body request))
               hashed-password (:password (:body request))]
-          ;; TODO can this be a deferred?
           (when (and username hashed-password)
-            (d/let-flow [user (user/get-user! queue-backend
-                                              {:tx-id :latest}
-                                              username)]
-              (when (= hashed-password (:unifydb/password user))
-                {:status 200
-                 :body {:username username
-                        :token (jwt/sign {:username username
-                                          ;; TODO get roles
-                                          :roles [:unifydb/user]
-                                          :created (datetime/iso-format
-                                                    (datetime/utc-now))}
-                                         (config/secret))}}))))
+            @(d/let-flow [user (user/get-user! queue-backend
+                                               {:tx-id :latest}
+                                               username)]
+               (when (= hashed-password (:unifydb/password user))
+                 {:status 200
+                  :body {:username username
+                         :token (jwt/sign {:username username
+                                           ;; TODO get roles
+                                           :roles [:unifydb/user]
+                                           :created (datetime/iso-format
+                                                     (datetime/utc-now))}
+                                          (config/secret))}}))))
         :else nil))))
 
 (defn not-authorized [_request]
