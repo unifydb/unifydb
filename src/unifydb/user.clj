@@ -1,8 +1,8 @@
 (ns unifydb.user
-  (:require [buddy.core.hash :as hash]
+  (:require [buddy.core.bytes :as bytes]
             [buddy.core.codecs :as codecs]
-            [buddy.core.bytes :as bytes]
             [buddy.core.codecs.base64 :as base64]
+            [buddy.core.hash :as hash]
             [buddy.core.nonce :as nonce]
             [manifold.deferred :as d]
             [unifydb.util :as util])

@@ -10,6 +10,7 @@
             [ring.middleware.keyword-params :as keyword-params]
             [ring.middleware.nested-params :as nested-params]
             [ring.middleware.params :as params]
+            [ring.middleware.session :as session]
             [ring.util.request :as request]
             [taoensso.timbre :as log]
             [unifydb.auth :as auth]
@@ -149,6 +150,7 @@
         (params/wrap-params)
         (keyword-params/wrap-keyword-params)
         (nested-params/wrap-nested-params)
+        (session/wrap-session)
         (wrap-logging)
         (wrap-content-type)
         (wrap-accept-type))))

@@ -3,9 +3,14 @@
    '{:linters
      {:unresolved-symbol
       {:exclude [(unifydb.server-test/with-server)]}}}}
-  (:require [clojure.data.json :as json]
+  (:require [buddy.core.bytes :as bytes]
+            [buddy.core.codecs :as codecs]
+            [buddy.core.codecs.base64 :as base64]
+            [buddy.core.hash :as hash]
+            [clojure.data.json :as json]
             [clojure.edn :as edn]
             [clojure.test :refer [deftest testing is]]
+            [unifydb.config :as config]
             [unifydb.messagequeue :as queue]
             [unifydb.messagequeue.memory :as memq]
             [unifydb.query :as query]
@@ -15,27 +20,28 @@
             [unifydb.transact :as transact]))
 
 (defmacro with-server [[req-fn store-name queue-name] txs & body]
-  `(let [~queue-name (memq/new)
-         ~store-name (memstore/new)
-         query# (query/new ~queue-name ~store-name)
-         transact# (transact/new ~queue-name ~store-name)
-         server# (server/new ~queue-name ~store-name)
-         ~req-fn (fn [request#]
-                   (let [app# (server/app (:state server#))
-                         response# (app# request#)]
-                     @response#))]
-     (try
-       (service/start! query#)
-       (service/start! transact#)
-       (service/start! server#)
-       (doseq [tx# ~txs]
-         (queue/publish ~queue-name :transact {:tx-data tx#}))
-       (Thread/sleep 5)  ;; give the transaction time to process
-       ~@body
-       (finally
-         (service/stop! server#)
-         (service/stop! transact#)
-         (service/stop! query#)))))
+  `(with-redefs [config/env (merge config/env {:secret "secret"})]
+     (let [~queue-name (memq/new)
+           ~store-name (memstore/new)
+           query# (query/new ~queue-name ~store-name)
+           transact# (transact/new ~queue-name ~store-name)
+           server# (server/new ~queue-name ~store-name)
+           ~req-fn (fn [request#]
+                     (let [app# (server/app (:state server#))
+                           response# (app# request#)]
+                       @response#))]
+       (try
+         (service/start! query#)
+         (service/start! transact#)
+         (service/start! server#)
+         (doseq [tx# ~txs]
+           (queue/publish ~queue-name :transact {:tx-data tx#}))
+         (Thread/sleep 5)  ;; give the transaction time to process
+         ~@body
+         (finally
+           (service/stop! server#)
+           (service/stop! transact#)
+           (service/stop! query#))))))
 
 (deftest query-endpoint
   (with-server [make-request store queue-backend]
@@ -151,8 +157,57 @@
       (let [response (make-request {:request-method :get
                                     :uri "/authenticate"
                                     :query-string "username=ben"
-                                    :headers {"accept" "application/edn"}})]
+                                    :headers {"accept" "application/edn"}})
+            body (edn/read-string (:body response))]
         (is (= 200 (:status response)))
-        (is (= "ben" (:username (edn/read-string (:body response)))))
-        (is (not (nil? (:salt (edn/read-string (:body response))))))
-        (is (string? (:salt (edn/read-string (:body response)))))))))
+        (is (= "ben" (:username body)))
+        (is (not (nil? (:salt body))))
+        (is (string? (:salt body)))))
+    (testing "authenticate POST request"
+      (let [get-response (make-request {:request-method :get
+                                        :uri "/authenticate"
+                                        :query-string "username=ben"
+                                        :headers {"accept" "application/edn"}})
+            {:keys [username salt]} (edn/read-string (:body get-response))
+            hashed-password (codecs/bytes->str
+                             (base64/encode
+                              (hash/sha512 (bytes/concat (codecs/str->bytes "top secret")
+                                                         (base64/decode salt)))))
+            response (make-request {:request-method :post
+                                    :uri "/authenticate"
+                                    :headers {"content-type" "application/edn"
+                                              "accept" "application/edn"}
+                                    :body (prn-str {:username username
+                                                    :password hashed-password})})
+            response-body (edn/read-string (:body response))]
+        (is (= 200 (:status response)))
+        (is (= "ben" (:username response-body)))
+        (is (not (nil? (:token response-body))))
+        (is (string? (:token response-body)))))
+    (testing "token-authenticated request"
+      (let [get-response (make-request {:request-method :get
+                                        :uri "/authenticate"
+                                        :query-string "username=ben"
+                                        :headers {"accept" "application/edn"}})
+            {:keys [username salt]} (edn/read-string (:body get-response))
+            hashed-password (codecs/bytes->str
+                             (base64/encode
+                              (hash/sha512 (bytes/concat (codecs/str->bytes "top secret")
+                                                         (base64/decode salt)))))
+            post-response (make-request {:request-method :post
+                                         :uri "/authenticate"
+                                         :headers {"content-type" "application/edn"
+                                                   "accept" "application/edn"}
+                                         :body (prn-str {:username username
+                                                         :password hashed-password})})
+            {:keys [token]} (edn/read-string (:body post-response))
+            response (make-request {:request-method :post
+                                    :uri "/query"
+                                    :headers {"content-type" "application/edn"
+                                              "accept" "application/edn"
+                                              "authorization" (format "Bearer %s" token)}
+                                    :body (prn-str '{:find [?foo]
+                                                     :where [[?thing :id "foo-thing"]
+                                                             [?thing :foo ?foo]]})})]
+        (is (= 200 (:status response)))
+        (is (= [["bar"]] (edn/read-string (:body response))))))))

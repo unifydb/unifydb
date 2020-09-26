@@ -26,7 +26,7 @@
 ;; TODO these need to handle deferreds
 
 (defn get-jwt [request]
-  (when-let [auth-header (:authorization (:headers request))]
+  (when-let [auth-header (get (:headers request) "authorization")]
     (second (re-matches #"^Bearer (.*)" auth-header))))
 
 (defn jwt-workflow [& {:keys [credential-fn]}]
@@ -48,7 +48,10 @@
                                  (datetime/utc-now)
                                  (datetime/from-iso (:created auth-map)))
                (config/token-ttl-seconds))
-        (workflows/make-auth auth-map)))
+        (workflows/make-auth auth-map
+                             {::friend/workflow ::jwt
+                              ::friend/redirect-on-auth? false
+                              ::friend/ensure-session true})))
     (catch ExceptionInfo e
       (log/warn "Error unsigning JWT" :error (ex-data e)))))
 
