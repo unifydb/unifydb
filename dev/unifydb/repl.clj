@@ -8,17 +8,26 @@
                  clojure.test
                  unifydb.messagequeue
                  unifydb.transact
-                 unifydb.util]}}}}
-  (:require [cognitect.test-runner :as test-runner]
-            [clojure.edn :as edn]
-            [clojure.repl :refer :all]
+                 unifydb.util]}
+      :unused-referred-var
+      {:exclude {clojure.pprint [pprint]
+                 clojure.test [run-tests]
+                 unifydb.messagequeue [publish subscribe]
+                 unifydb.transact [transact]
+                 unifydb.util [query]}}
+      :refer-all
+      {:exclude [clojure.repl]}}}}
+  (:require [clojure.edn :as edn]
             [clojure.pprint :refer [pprint]]
+            [clojure.repl :refer :all]
             [clojure.test :refer [run-tests]]
+            [cognitect.test-runner :as test-runner]
+            [unifydb.cache.memory :as memcache]
             [unifydb.messagequeue :as queue :refer [publish subscribe]]
             [unifydb.messagequeue.memory :as memq]
             [unifydb.query :as query]
-            [unifydb.service :as service]
             [unifydb.server :as server]
+            [unifydb.service :as service]
             [unifydb.storage.memory :as memstore]
             [unifydb.structlog :as structlog]
             [unifydb.transact :as transact :refer [transact]]
@@ -32,10 +41,12 @@
 
 (defn make-state []
   (let [queue (memq/new)
-        store (memstore/new)]
+        store (memstore/new)
+        cache (memcache/new)]
     {:queue queue
      :store store
-     :server (server/new queue store)
+     :cache cache
+     :server (server/new queue store cache)
      :query (query/new queue store)
      :transact (transact/new queue store)}))
 

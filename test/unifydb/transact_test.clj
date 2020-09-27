@@ -5,7 +5,6 @@
                                    fact-attribute]]
             [unifydb.messagequeue.memory :as memq]
             [unifydb.service :as service]
-            [unifydb.storage :as storage]
             [unifydb.storage.memory :as memstore]
             [unifydb.transact :as t]))
 
@@ -51,26 +50,19 @@
         (let [tx-data [[:unifydb/add "my-user" :unifydb/username "user"]
                        [:unifydb/add "my-user" :unifydb/password "pencil"]]
               tx-report (:tx-report @(t/transact queue-backend tx-data))
-              tx-id (:tx-id (:db-after tx-report))
-              facts (:tx-data tx-report)
-              stored-facts (storage/fetch-facts store '[_ _] tx-id {})]
-          (is (= (count facts) 2))
+              facts (:tx-data tx-report)]
+          (is (= (count facts) 3))
+          (is (not= "pencil" (fact-value
+                              (first
+                               (filter (comp #{:unifydb/password}
+                                             fact-attribute)
+                                       facts)))))
           (is (= "user" (fact-value
                          (first
                           (filter
                            (comp #{:unifydb/username}
                                  fact-attribute)
                            facts)))))
-          (is (= (fact-value (first facts)) "user"))
-          (is (= 5 (count (filter (comp #{:unifydb/username
-                                          :unifydb/salt
-                                          :unifydb/i
-                                          :unifydb/server-key
-                                          :unifydb/stored-key}
-                                        fact-attribute)
-                                  stored-facts))))
-          (is (= 0 (count (filter (comp #{:unifydb/password}
-                                        fact-attribute)
-                                  stored-facts))))))
+          (is (= (fact-value (first facts)) "user"))))
       (finally
         (service/stop! transact-service)))))

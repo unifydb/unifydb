@@ -3,11 +3,16 @@
             [clojure.data.json :as json]
             [clojure.edn :as edn]
             [clojure.string :as string]
-            [compojure.core :as compojure :refer [POST]]
+            [compojure.core :as compojure :refer [GET POST]]
             [compojure.route :as route]
             [manifold.deferred :as d]
+            [ring.middleware.keyword-params :as keyword-params]
+            [ring.middleware.nested-params :as nested-params]
+            [ring.middleware.params :as params]
             [ring.util.request :as request]
             [taoensso.timbre :as log]
+            [unifydb.auth :as auth]
+            [unifydb.config :as config]
             [unifydb.service :as service]
             [unifydb.transact :as transact]
             [unifydb.util :as util])
@@ -72,27 +77,38 @@
                :tx-report
                #(assoc {} :body %)))))
 
-(defn routes [queue-backend]
+(defn secure-routes [queue-backend]
   (compojure/routes
    (POST "/query" _request (query queue-backend))
-   (POST "/transact" _request (transact queue-backend))
+   (POST "/transact" _request (transact queue-backend))))
+
+(defn routes [queue-backend cache]
+  (compojure/routes
+   (compojure/wrap-routes
+    (secure-routes queue-backend)
+    auth/wrap-jwt-auth)
+   (GET "/authenticate" _request
+     (auth/login-get-salt-handler queue-backend cache))
+   (POST "/authenticate" _request
+     (auth/login-handler queue-backend cache))
    (route/not-found
     {:body {:message "These aren't the droids you're looking for."}})))
 
 (defn wrap-content-type [handler]
   (fn [request]
-    (let [content-type (request/content-type request)
-          body (condp = (string/lower-case content-type)
-                 "application/json" (-> (request/body-string request)
-                                        (json/read-str)
-                                        (json->edn))
-                 "application/edn" (edn/read-string (request/body-string request))
-                 :unsupported)]
-      (if (= :unsupported body)
-        (d/success-deferred
-         {:status 400
-          :body {:message (str "Unsupported content type " content-type)}})
-        (handler (assoc request :body body))))))
+    (if-let [content-type (request/content-type request)]
+      (let [body (condp = (string/lower-case content-type)
+                   "application/json" (-> (request/body-string request)
+                                          (json/read-str)
+                                          (json->edn))
+                   "application/edn" (edn/read-string (request/body-string request))
+                   :unsupported)]
+        (if (= :unsupported body)
+          (d/success-deferred
+           {:status 400
+            :body {:message (str "Unsupported content type " content-type)}})
+          (handler (assoc request :body body))))
+      (handler request))))
 
 (defn wrap-accept-type [handler]
   (fn [request]
@@ -103,6 +119,7 @@
                                                  (json/write-str))
                                         :type "application/json"}
                     "application/edn" {:fn pr-str :type "application/edn"}
+                    "*/*" {:fn pr-str :type "application/edn"}
                     {:error (format "Unsupported accept type %s" accept-type)})]
       (if (:error wrapper)
         (d/success-deferred {:status 400
@@ -124,8 +141,11 @@
            response))))))
 
 (defn app [state]
-  (let [{:keys [queue-backend]} @state]
-    (-> (routes queue-backend)
+  (let [{:keys [queue-backend cache]} @state]
+    (-> (routes queue-backend cache)
+        (params/wrap-params)
+        (keyword-params/wrap-keyword-params)
+        (nested-params/wrap-nested-params)
         (wrap-logging)
         (wrap-content-type)
         (wrap-accept-type))))
@@ -134,9 +154,8 @@
   (let [server (:server @state)
         handler (app state)]
     (when server (.close server))
-    ;; TODO add config system and read port from config with default
     (swap! state #(assoc % :server
-                         (http/start-server handler {:port 8181})))))
+                         (http/start-server handler {:port (config/port)})))))
 
 (defn stop-server! [state]
   (let [server (:server @state)]
@@ -149,6 +168,7 @@
   (stop! [self]
     (stop-server! (:state self))))
 
-(defn new [queue-backend storage-backend]
+(defn new [queue-backend storage-backend cache]
   (->WebServerService (atom {:queue-backend queue-backend
-                             :storage-backend storage-backend})))
+                             :storage-backend storage-backend
+                             :cache cache})))
