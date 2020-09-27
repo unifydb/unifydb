@@ -2,6 +2,5 @@
  {:not-a-function
   {:skip-args [clojure.core.match/match]}
   :unresolved-symbol
-  {:exclude [(clojure.core.match/match)
-             (com.gfredericks.test.chuck.clojure-test/checking)]}}
+  {:exclude [(clojure.core.match/match)]}}
  :lint-as {manifold.deferred/let-flow clojure.core/let}}
