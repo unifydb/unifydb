@@ -1,7 +1,4 @@
-(ns unifydb.cache
-  {:clj-kondo/config
-   '{:linters
-     {:redefined-var {:level :off}}}})
+(ns unifydb.cache)
 
 (defprotocol ICacheBackend
   (cache-set! [cache key value] [cache key value ttl])
