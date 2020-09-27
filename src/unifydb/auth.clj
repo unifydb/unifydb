@@ -11,18 +11,6 @@
             [unifydb.cache :as cache])
   (:import [clojure.lang ExceptionInfo]))
 
-;; Two workflows:
-;; The first one checks for a JWT and verifies a timestamp-generated
-;; nonce to prevent replay attacks
-;; If the first fails, the second one initiates the login sequence
-;; To log in:
-;; - server sends the user salt and a nonce
-;; - the nonce needs to be stored somewhere accessible to all running
-;;   server instances
-;; - client SHA-512 hashes the password + salt + nonce
-;; - server verifies with its copy of the hashed password and the nonce
-;; - on success, server sends back a JWT with a (configurable) limited TTL
-
 (defn get-jwt [request]
   (when-let [auth-header (get (:headers request) "authorization")]
     (second (re-matches #"^Bearer (.*)" auth-header))))
