@@ -82,15 +82,15 @@
    (POST "/query" _request (query queue-backend))
    (POST "/transact" _request (transact queue-backend))))
 
-(defn routes [queue-backend]
+(defn routes [queue-backend cache]
   (compojure/routes
    (compojure/wrap-routes
     (secure-routes queue-backend)
     auth/wrap-jwt-auth)
    (GET "/authenticate" _request
-     (auth/login-get-salt-handler queue-backend))
+     (auth/login-get-salt-handler queue-backend cache))
    (POST "/authenticate" _request
-     (auth/login-handler queue-backend))
+     (auth/login-handler queue-backend cache))
    (route/not-found
     {:body {:message "These aren't the droids you're looking for."}})))
 
@@ -141,8 +141,8 @@
            response))))))
 
 (defn app [state]
-  (let [{:keys [queue-backend]} @state]
-    (-> (routes queue-backend)
+  (let [{:keys [queue-backend cache]} @state]
+    (-> (routes queue-backend cache)
         (params/wrap-params)
         (keyword-params/wrap-keyword-params)
         (nested-params/wrap-nested-params)
@@ -168,6 +168,7 @@
   (stop! [self]
     (stop-server! (:state self))))
 
-(defn new [queue-backend storage-backend]
+(defn new [queue-backend storage-backend cache]
   (->WebServerService (atom {:queue-backend queue-backend
-                             :storage-backend storage-backend})))
+                             :storage-backend storage-backend
+                             :cache cache})))

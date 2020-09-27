@@ -18,7 +18,8 @@
             [unifydb.service :as service]
             [unifydb.storage.memory :as memstore]
             [unifydb.transact :as transact]
-            [unifydb.auth :as auth]))
+            [unifydb.auth :as auth]
+            [unifydb.cache.memory :as memcache]))
 
 (defmacro with-server [[req-fn store-name queue-name token-header-name] txs & body]
   `(with-redefs [config/env (merge config/env {:secret "secret"})]
@@ -26,7 +27,8 @@
            ~store-name (memstore/new)
            query# (query/new ~queue-name ~store-name)
            transact# (transact/new ~queue-name ~store-name)
-           server# (server/new ~queue-name ~store-name)
+           cache# (memcache/new)
+           server# (server/new ~queue-name ~store-name cache#)
            ~req-fn (fn [request#]
                      (let [app# (server/app (:state server#))
                            response# (app# request#)]
@@ -170,13 +172,20 @@
         (is (= 200 (:status response)))
         (is (= "ben" (:username body)))
         (is (not (nil? (:salt body))))
-        (is (string? (:salt body)))))
+        (is (string? (:salt body)))
+        (is (not (nil? (:nonce-key body))))
+        (is (string? (:nonce-key body)))
+        (is (not (nil? (:nonce body))))
+        (is (string? (:nonce body)))))
     (testing "authenticate POST request"
       (let [get-response (make-request {:request-method :get
                                         :uri "/authenticate"
                                         :query-string "username=ben"
                                         :headers {"accept" "application/edn"}})
-            {:keys [username salt]} (edn/read-string (:body get-response))
+            {:keys [username
+                    salt
+                    nonce
+                    nonce-key]} (edn/read-string (:body get-response))
             hashed-password (codecs/bytes->str
                              (base64/encode
                               (hash/sha512 (bytes/concat (codecs/str->bytes "top secret")
@@ -186,18 +195,44 @@
                                     :headers {"content-type" "application/edn"
                                               "accept" "application/edn"}
                                     :body (prn-str {:username username
-                                                    :password hashed-password})})
+                                                    :password hashed-password
+                                                    :nonce nonce
+                                                    :nonce-key nonce-key})})
             response-body (edn/read-string (:body response))]
         (is (= 200 (:status response)))
         (is (= "ben" (:username response-body)))
         (is (not (nil? (:token response-body))))
         (is (string? (:token response-body)))))
+    (testing "invalid nonce"
+      (let [get-response (make-request {:request-method :get
+                                        :uri "/authenticate"
+                                        :query-string "username=ben"
+                                        :headers {"accept" "application/edn"}})
+            {:keys [username
+                    salt
+                    nonce-key]} (edn/read-string (:body get-response))
+            hashed-password (codecs/bytes->str
+                             (base64/encode
+                              (hash/sha512 (bytes/concat (codecs/str->bytes "top secret")
+                                                         (base64/decode salt)))))
+            response (make-request {:request-method :post
+                                    :uri "/authenticate"
+                                    :headers {"content-type" "application/edn"
+                                              "accept" "application/edn"}
+                                    :body (prn-str {:username username
+                                                    :password hashed-password
+                                                    :nonce "wrong"
+                                                    :nonce-key nonce-key})})]
+        (is (= 400 (:status response)))))
     (testing "token-authenticated request"
       (let [get-response (make-request {:request-method :get
                                         :uri "/authenticate"
                                         :query-string "username=ben"
                                         :headers {"accept" "application/edn"}})
-            {:keys [username salt]} (edn/read-string (:body get-response))
+            {:keys [username
+                    salt
+                    nonce
+                    nonce-key]} (edn/read-string (:body get-response))
             hashed-password (codecs/bytes->str
                              (base64/encode
                               (hash/sha512 (bytes/concat (codecs/str->bytes "top secret")
@@ -207,7 +242,9 @@
                                          :headers {"content-type" "application/edn"
                                                    "accept" "application/edn"}
                                          :body (prn-str {:username username
-                                                         :password hashed-password})})
+                                                         :password hashed-password
+                                                         :nonce-key nonce-key
+                                                         :nonce nonce})})
             {:keys [token]} (edn/read-string (:body post-response))
             response (make-request {:request-method :post
                                     :uri "/query"

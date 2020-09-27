@@ -1,10 +1,14 @@
 (ns unifydb.auth
-  (:require [buddy.sign.jwt :as jwt]
+  (:require [buddy.core.codecs :as codecs]
+            [buddy.core.codecs.base64 :as base64]
+            [buddy.core.nonce :as nonce]
+            [buddy.sign.jwt :as jwt]
             [manifold.deferred :as d]
             [taoensso.timbre :as log]
             [unifydb.config :as config]
             [unifydb.datetime :as datetime]
-            [unifydb.user :as user])
+            [unifydb.user :as user]
+            [unifydb.cache :as cache])
   (:import [clojure.lang ExceptionInfo]))
 
 ;; Two workflows:
@@ -62,37 +66,50 @@
               :created created}
              (config/secret))))
 
-(defn login-get-salt-handler [queue-backend]
+(defn login-get-salt-handler [queue-backend cache]
   (fn [request]
     (log/info "in login get handler")
     (if-let [username (get (:params request) "username")]
-      (d/let-flow [user (user/get-user! queue-backend
+      (d/let-flow [nonce (-> (nonce/random-nonce 64)
+                             (base64/encode)
+                             (codecs/bytes->str))
+                   nonce-key (-> (nonce/random-bytes 16)
+                                 (base64/encode)
+                                 (codecs/bytes->str))
+                   user (user/get-user! queue-backend
                                         {:tx-id :latest}
                                         username)]
         (if user
-          {:status 200
-           :body {:username username
-                  :salt (:unifydb/salt user)}}
+          (do
+            (cache/cache-set! cache nonce-key nonce 60)
+            {:status 200
+             :body {:username username
+                    :salt (:unifydb/salt user)
+                    :nonce-key nonce-key
+                    :nonce nonce}})
           {:status 400
            :body "Invalid 'username' parameter"}))
       {:status 400
        :body "Invalid 'username' parameter"})))
 
-;; TODO add a nonce to prevent replay attacks
-(defn login-handler [queue-backend]
+(defn login-handler [queue-backend cache]
   (fn [request]
     (let [username (:username (:body request))
-          hashed-password (:password (:body request))]
-      (if (and username hashed-password)
+          hashed-password (:password (:body request))
+          nonce-key (:nonce-key (:body request))
+          client-nonce (:nonce (:body request))]
+      (if (and username hashed-password nonce-key client-nonce)
         (d/let-flow [user (user/get-user! queue-backend
                                           {:tx-id :latest}
-                                          username)]
-          (if (= hashed-password (:unifydb/password user))
+                                          username)
+                     nonce (cache/cache-get cache nonce-key)]
+          (if (and (= client-nonce nonce)
+                   (= hashed-password (:unifydb/password user)))
             {:status 200
              :body {:username username
                     ;; TODO get user roles
                     :token (make-jwt username [:unifydb/user])}}
             {:status 400
-             :body "Invalid username or password"}))
+             :body "Invalid username, password, or nonce"}))
         {:status 400
-         :body "Invalid username or password"}))))
+         :body "Invalid username, password, or nonce"}))))

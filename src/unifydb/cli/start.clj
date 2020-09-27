@@ -2,6 +2,7 @@
   (:require [clojure.string :as string]
             [clojure.tools.cli :as cli]
             [taoensso.timbre :as log]
+            [unifydb.cache.memory :as memcache]
             [unifydb.messagequeue.memory :as memq]
             [unifydb.query :as query]
             [unifydb.server :as server]
@@ -39,13 +40,22 @@
   (condp = (get-in config [:storage-backend :type])
     :memory (memstore/new)))
 
+(defn make-cache-backend
+  [config]
+  (condp = (get-in config [:cache-backend :type])
+    :memory (memcache/new)))
+
 (defn start-services! [config services]
   (let [queue-backend (make-queue-backend config)
         storage-backend (make-storage-backend config)
+        cache (make-cache-backend config)
         service-impls (map #(condp = %
-                              "server" (server/new queue-backend storage-backend)
+                              "server" (server/new queue-backend
+                                                   storage-backend
+                                                   cache)
                               "query" (query/new queue-backend storage-backend)
-                              "transact" (transact/new queue-backend storage-backend))
+                              "transact" (transact/new queue-backend
+                                                       storage-backend))
                            services)]
     (log/info "Starting services" :services services)
     (doseq [service service-impls]
