@@ -51,6 +51,17 @@
       {:status 401
        :body "Access denied"})))
 
+(defn make-jwt
+  ([username roles]
+   (make-jwt username
+             roles
+             (datetime/iso-format (datetime/utc-now))))
+  ([username roles created]
+   (jwt/sign {:username username
+              :roles roles
+              :created created}
+             (config/secret))))
+
 (defn login-get-salt-handler [queue-backend]
   (fn [request]
     (log/info "in login get handler")
@@ -79,12 +90,8 @@
           (if (= hashed-password (:unifydb/password user))
             {:status 200
              :body {:username username
-                    :token (jwt/sign {:username username
-                                      ;; TODO get roles
-                                      :roles [:unifydb/user]
-                                      :created (datetime/iso-format
-                                                (datetime/utc-now))}
-                                     (config/secret))}}
+                    ;; TODO get user roles
+                    :token (make-jwt username [:unifydb/user])}}
             {:status 400
              :body "Invalid username or password"}))
         {:status 400

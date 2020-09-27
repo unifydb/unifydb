@@ -17,9 +17,10 @@
             [unifydb.server :as server]
             [unifydb.service :as service]
             [unifydb.storage.memory :as memstore]
-            [unifydb.transact :as transact]))
+            [unifydb.transact :as transact]
+            [unifydb.auth :as auth]))
 
-(defmacro with-server [[req-fn store-name queue-name] txs & body]
+(defmacro with-server [[req-fn store-name queue-name token-header-name] txs & body]
   `(with-redefs [config/env (merge config/env {:secret "secret"})]
      (let [~queue-name (memq/new)
            ~store-name (memstore/new)
@@ -29,7 +30,9 @@
            ~req-fn (fn [request#]
                      (let [app# (server/app (:state server#))
                            response# (app# request#)]
-                       @response#))]
+                       @response#))
+           token# (auth/make-jwt "ben" [:unifydb/user])
+           ~token-header-name (format "Bearer %s" token#)]
        (try
          (service/start! query#)
          (service/start! transact#)
@@ -44,7 +47,7 @@
            (service/stop! query#))))))
 
 (deftest query-endpoint
-  (with-server [make-request store queue-backend]
+  (with-server [make-request store queue-backend auth-header]
     '[[[:unifydb/add "ben" :name "Ben Bitdiddle"]
        [:unifydb/add "ben" :job ["computer" "wizard"]]
        [:unifydb/add "ben" :salary 60000]
@@ -57,7 +60,8 @@
                       {:request-method :post
                        :uri "/query"
                        :headers {"content-type" "application/edn"
-                                 "accept" "application/edn"}
+                                 "accept" "application/edn"
+                                 "authorization" auth-header}
                        :body (prn-str
                               {:tx-id 3
                                :query '{:find [?name]
@@ -70,7 +74,8 @@
       (let [response (make-request {:request-method :post
                                     :uri "/query"
                                     :headers {"content-type" "application/json"
-                                              "accept" "application/json"}
+                                              "accept" "application/json"
+                                              "authorization" auth-header}
                                     :body (json/write-str
                                            {":tx-id" 3
                                             ":query" {":find" ["'?name"]
@@ -81,14 +86,15 @@
                           :body "[[\"Alyssa P. Hacker\"],[\"Ben Bitdiddle\"]]"}))))))
 
 (deftest transact-endpoint
-  (with-server [make-request store queue-backend]
+  (with-server [make-request store queue-backend auth-header]
     []
     (testing "/transact (EDN)"
       (let [response (make-request
                       {:request-method :post
                        :uri "/transact"
                        :headers {"content-type" "application/edn"
-                                 "accept" "application/edn"}
+                                 "accept" "application/edn"
+                                 "authorization" auth-header}
                        :body (prn-str
                               {:tx-data [[:unifydb/add "ben" :name "Ben Bitdiddle"]
                                          [:unifydb/add "alyssa" :name "Alyssa P. Hacker"]
@@ -115,7 +121,8 @@
                       {:request-method :post
                        :uri "/transact"
                        :headers {"content-type" "application/json"
-                                 "accept" "application/json"}
+                                 "accept" "application/json"
+                                 "authorization" auth-header}
                        :body (json/write-str
                               {":tx-data" [[":unifydb/add" "ben" ":name" "Ben Bitdiddle"]
                                            [":unifydb/add" "alyssa" ":name" "Alyssa P. Hacker"]
@@ -139,7 +146,7 @@
                             "unifydb.tx" 6}}))))))
 
 (deftest test-auth
-  (with-server [make-request store queue-backend]
+  (with-server [make-request store queue-backend _auth-header]
     '[[[:unifydb/add "user" :unifydb/username "ben"]
        [:unifydb/add "user" :unifydb/password "top secret"]
        [:unifydb/add "thing" :id "foo-thing"]
