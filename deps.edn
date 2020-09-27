@@ -3,7 +3,6 @@
   buddy/buddy-core {:mvn/version "1.6.0"}
   buddy/buddy-sign {:mvn/version "3.1.0"}
   compojure {:mvn/version "1.6.1"}
-  com.cemerick/friend {:mvn/version "0.2.3"}
   com.fzakaria/slf4j-timbre {:mvn/version "0.3.19"}
   com.gfredericks/test.chuck {:mvn/version "0.2.10"}
   com.taoensso/timbre {:mvn/version "4.10.0"}

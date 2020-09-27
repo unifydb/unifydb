@@ -1,16 +1,14 @@
 (ns unifydb.server
   (:require [aleph.http :as http]
-            [cemerick.friend :as friend]
             [clojure.data.json :as json]
             [clojure.edn :as edn]
             [clojure.string :as string]
-            [compojure.core :as compojure :refer [POST]]
+            [compojure.core :as compojure :refer [GET POST]]
             [compojure.route :as route]
             [manifold.deferred :as d]
             [ring.middleware.keyword-params :as keyword-params]
             [ring.middleware.nested-params :as nested-params]
             [ring.middleware.params :as params]
-            [ring.middleware.session :as session]
             [ring.util.request :as request]
             [taoensso.timbre :as log]
             [unifydb.auth :as auth]
@@ -86,9 +84,13 @@
 
 (defn routes [queue-backend]
   (compojure/routes
-   (friend/wrap-authorize
+   (compojure/wrap-routes
     (secure-routes queue-backend)
-    #{:unifydb/user})
+    auth/wrap-jwt-auth)
+   (GET "/authenticate" _request
+     (auth/login-get-salt-handler queue-backend))
+   (POST "/authenticate" _request
+     (auth/login-handler queue-backend))
    (route/not-found
     {:body {:message "These aren't the droids you're looking for."}})))
 
@@ -141,16 +143,9 @@
 (defn app [state]
   (let [{:keys [queue-backend]} @state]
     (-> (routes queue-backend)
-        (friend/authenticate
-         {:workflows [(auth/jwt-workflow
-                       :credential-fn auth/jwt-credential-fn)
-                      (auth/login-workflow queue-backend)]
-          :unauthenticated-handler auth/not-authenticated
-          :unauthorized-handler auth/not-authorized})
         (params/wrap-params)
         (keyword-params/wrap-keyword-params)
         (nested-params/wrap-nested-params)
-        (session/wrap-session)
         (wrap-logging)
         (wrap-content-type)
         (wrap-accept-type))))

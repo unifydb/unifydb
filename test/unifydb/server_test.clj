@@ -149,9 +149,10 @@
                                     :uri "/query"
                                     :headers {"content-type" "application/edn"
                                               "accept" "application/edn"}
-                                    :body (prn-str '{:find [?foo]
-                                                     :where [[?thing :id "foo-thing"]
-                                                             [?thing :foo ?foo]]})})]
+                                    :body (prn-str '{:tx-id :latest
+                                                     :query {:find [?foo]
+                                                             :where [[?thing :id "foo-thing"]
+                                                                     [?thing :foo ?foo]]}})})]
         (is (= 401 (:status response)))))
     (testing "authenticate GET request"
       (let [response (make-request {:request-method :get
@@ -206,8 +207,13 @@
                                     :headers {"content-type" "application/edn"
                                               "accept" "application/edn"
                                               "authorization" (format "Bearer %s" token)}
-                                    :body (prn-str '{:find [?foo]
-                                                     :where [[?thing :id "foo-thing"]
-                                                             [?thing :foo ?foo]]})})]
+                                    :body (prn-str '{:tx-id :latest
+                                                     :query {:find [?foo]
+                                                             :where [[?thing :id "foo-thing"]
+                                                                     [?thing :foo ?foo]]}})})]
         (is (= 200 (:status response)))
-        (is (= [["bar"]] (edn/read-string (:body response))))))))
+        (is (= [["bar"]] (edn/read-string (:body response))))))
+    (testing "not found"
+      (let [response (make-request {:request-method :get
+                                    :uri "/does-not-exist"})]
+        (is (= 404 (:status response)))))))
