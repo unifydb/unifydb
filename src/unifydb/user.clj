@@ -5,21 +5,18 @@
             [buddy.core.hash :as hash]
             [buddy.core.nonce :as nonce]
             [manifold.deferred :as d]
-            [unifydb.util :as util])
-  (:import [java.security SecureRandom]))
+            [unifydb.util :as util]))
 
 (defn make-user
   "Makes a new user record.
-  Does not persist to the database.
-  For deterministic output, pass a pre-seeded Random instance."
-  ([username password random]
-   (let [salt (nonce/random-bytes 64 random)
-         hashed-pw (hash/sha512 (bytes/concat (codecs/str->bytes password)
-                                              salt))]
-     {:unifydb/username username
-      :unifydb/password (codecs/bytes->str (base64/encode hashed-pw))
-      :unifydb/salt (codecs/bytes->str (base64/encode salt))}))
-  ([username password] (make-user username password (SecureRandom.))))
+  Does not persist to the database."
+  [username password]
+  (let [salt (nonce/random-bytes 64)
+        hashed-pw (hash/sha512 (bytes/concat (codecs/str->bytes password)
+                                             salt))]
+    {:unifydb/username username
+     :unifydb/password (codecs/bytes->str (base64/encode hashed-pw))
+     :unifydb/salt (codecs/bytes->str (base64/encode salt))}))
 
 (defn get-user!
   "Gets the user record denoted by `username`, returning a deferred"

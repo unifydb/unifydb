@@ -268,7 +268,7 @@
                 :db db-latest
                 :expected '[[1]]}]]
         (testing (str query)
-          (is (= (:results @(util/query queue-backend db query))
-                 expected))))
+          (is (= expected
+                 (:results @(util/query queue-backend db query))))))
       (finally
         (service/stop! query-service)))))

@@ -8,7 +8,15 @@
                  clojure.test
                  unifydb.messagequeue
                  unifydb.transact
-                 unifydb.util]}}}}
+                 unifydb.util]}
+      :unused-referred-var
+      {:exclude {clojure.pprint [pprint]
+                 clojure.test [run-tests]
+                 unifydb.messagequeue [publish subscribe]
+                 unifydb.transact [transact]
+                 unifydb.util [query]}}
+      :refer-all
+      {:exclude [clojure.repl]}}}}
   (:require [cognitect.test-runner :as test-runner]
             [clojure.edn :as edn]
             [clojure.repl :refer :all]

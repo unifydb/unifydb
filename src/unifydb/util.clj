@@ -49,7 +49,7 @@
          id (str (UUID/randomUUID))
          bindings (into {} (for [[k v] bindings]
                              [(symbol (name k)) v]))
-         query (assoc q :bind bindings)]
+         query (assoc q :bind (merge bindings (:bind q)))]
      (queue/publish queue-backend :query {:id id :db db :query query})
      (as-> results v
        (s/filter #(= (:id %) id) v)
