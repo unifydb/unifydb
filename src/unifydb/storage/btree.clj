@@ -22,71 +22,68 @@
   [val]
   (string? val))
 
-(defn prefixed?
-  "True if `val` starts with `prefix`."
-  [prefix val]
-  (when val
-    (and (vector? val)
-         ;; TODO will this need to change to support string-matching queries?
-         ;; I.e. what if val is [:attr "foobar" 123] and we are looking for
-         ;; [:attr "foo%"] (or whatever that syntax will look like)?
-         (= prefix (subvec val 0 (count prefix))))))
+(defn lower-bound
+  "Returns the lower bound of the region in `node` prefixed with
+  `prefix`. Returns `nil` if no values in `node` have the `prefix`."
+  [node prefix]
+  (letfn [(search [node prefix left right found?]
+            (if (>= left right)
+              (and found? left)
+              (let [middle (+ left (quot (- right left) 2))
+                    middle (if (pointer? (get node middle))
+                             (inc middle)
+                             middle)
+                    val (subvec (get node middle) 0 (count prefix))]
+                (cond
+                  (>= middle right) (and found? middle)
+                  (neg? (compare val prefix)) (recur node prefix (+ middle 1) right found?)
+                  (zero? (compare val prefix)) (recur node prefix left middle true)
+                  (pos? (compare val prefix)) (recur node prefix left middle found?)))))]
+    (search node prefix 0 (count node) nil)))
 
-(defn boundary?
-  "True if `n` is prefixed with `prefix` but (next-fn n) is not."
-  [node prefix n next-fn]
-  (and (prefixed? prefix (get node n))
-       (not (prefixed? prefix (get node (next-fn n))))))
+(defn upper-bound
+  "Returns the upper bound of the region in `node` prefixed with
+  `prefix`. Returns `nil` if no values in `node` have the
+  `previx`. Note that the return value is actually the index of the
+  last prefixed value + 1, so that (subvec node lower-bound
+  upper-bound) returns the prefixed section."
+  [node prefix]
+  (letfn [(search [node prefix left right found?]
+            (if (>= left right)
+              (and found? left)
+              (let [middle (+ left (quot (- right left) 2))
+                    middle (if (pointer? (get node middle))
+                             (inc middle)
+                             middle)
+                    val (subvec (get node middle) 0 (count prefix))]
+                (cond
+                  (>= middle right) (and found? middle)
+                  (neg? (compare prefix val)) (recur node prefix left middle found?)
+                  (zero? (compare prefix val)) (recur node prefix (+ middle 1) right true)
+                  (pos? (compare prefix val)) (recur node prefix (+ middle 1) right found?)))))]
+    (search node prefix 0 (count node) nil)))
 
-(defn find-traverse-bounds
-  "Returns the lower and upper bounds of indices into `node` in which
-  values start with the `prefix`. Returns nil if the prefix isn't
-  found in the node at all."
-  [node prefix lower-bound upper-bound interval]
-  ;; if lower and upper are both on boundaries, return them
-  ;; if lower is on a boundary but upper is not, upper = upper - i and halve i
-  ;; if upper is on a boundary but lower is not, lower = lower + i and halve i
-  ;; if neither upper nor lower are on boundaries, upper = upper - i, lower = lower + i, halve i
-  ;; if upper <= lower, return nil (prefix was not found)
-  (cond
-    (<= upper-bound lower-bound) nil
-    ;; This is always returning true when one of the bounds is on a pointer
-    ;; I think we need to treat pointers as never on boundaries, then expand the boundaries by 1
-    ;; at the end if lower- and greater-than indices are pointers
-    (and (boundary? node prefix lower-bound dec)
-         (boundary? node prefix (- upper-bound 1) inc))
-    (let [lower (if (pointer? (get node (dec lower-bound)))
-                  (dec lower-bound)
-                  lower-bound)
-          upper (if (pointer? (get node (inc upper-bound)))
-                  (inc upper-bound)
-                  upper-bound)]
-      [lower upper])
-    :else (let [next-lower (if (boundary? node prefix lower-bound dec)
-                             lower-bound
-                             (+ lower-bound interval))
-                next-upper (if (boundary? node prefix upper-bound inc)
-                             upper-bound
-                             (- upper-bound interval))
-                next-interval (/ interval 2)]
-            (recur node prefix next-lower next-upper next-interval))))
 
 (defn traverse-iter
   [store node prefix acc]
-  (if-let [[lower-bound upper-bound] (find-traverse-bounds node
-                                                           prefix
-                                                           0
-                                                           (count node)
-                                                           (/ (count node) 2))]
-    (vec
-     (concat acc
-             (mapcat (fn [val]
-                       (if (pointer? val)
-                         (let [child (store/get store val)]
-                           (traverse-iter store child prefix acc))
-                         [val]))
-                     (subvec node lower-bound upper-bound))))
-    acc))
+  (let [lower-bound (lower-bound node prefix)
+        upper-bound (upper-bound node prefix)
+        lower-bound (if (pointer? (get node (dec lower-bound)))
+                      (dec lower-bound)
+                      lower-bound)
+        upper-bound (if (pointer? (get node upper-bound))
+                      (inc upper-bound)
+                      upper-bound)]
+    (if (and lower-bound upper-bound)
+      (vec
+       (concat acc
+               (mapcat (fn [val]
+                         (if (pointer? val)
+                           (let [child (store/get store val)]
+                             (traverse-iter store child prefix acc))
+                           [val]))
+                       (subvec node lower-bound upper-bound))))
+      acc)))
 
 (defn traverse
   "Traverses `tree`, returning all keys that start with `prefix`."

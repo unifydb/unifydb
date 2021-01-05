@@ -22,8 +22,8 @@
                              ["d" "c"]
                              ["d" "d"]]}))
           btree (btree/new! store "root" 7)]
-      (t/is (= (btree/traverse btree ["b"])
-               [["b" "c"]
-                ["b" "a"]
+      (t/is (= [["b" "a"]
                 ["b" "b"]
-                ["b" "d"]])))))
+                ["b" "c"]
+                ["b" "d"]]
+               (btree/traverse btree ["b"]))))))
