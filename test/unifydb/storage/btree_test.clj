@@ -3,8 +3,8 @@
             [unifydb.storage.btree :as btree]
             [unifydb.storage.memory :as memstore]))
 
-(t/deftest test-traverse
-  (t/testing "Traversing"
+(t/deftest test-search
+  (t/testing "Searching"
     (let [store (memstore/->InMemoryKeyValueStore
                  (atom {"root" ["1"
                                 ["a" "d"]
@@ -26,4 +26,4 @@
                 ["b" "b"]
                 ["b" "c"]
                 ["b" "d"]]
-               (btree/traverse btree ["b"]))))))
+               (btree/search btree ["b"]))))))
