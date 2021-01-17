@@ -2,31 +2,39 @@
   "An implementation of a b-tree built on top of a KV store"
   (:require [unifydb.storage :as store]))
 
-;; This is a pure b-tree - the nodes store complete facts (i.e. the
-;; keys are the values). This means that a node (stored as a value in
-;; the KV store) is a vector where each item is either a serialized
-;; fact 5-tuple or the key to a child node. It may be helpful to think
-;; of this as an implementation of a sorted set backed by an external
-;; key-value store.
-
 (defn pointer?
   "Pointers in b-tree nodes are strings, whereas values are vectors."
   [val]
   (string? val))
 
-(defn compare-to-prefix
-  "Given a partial fact-tuple `prefix` and a fact-tuple `val`, returns
-  1 if the prefix comes after the value, 0 if the value is prefixed by
-  the prefix, and -1 if the prefix comes before the value.
+(defn leaf?
+  "The first value of a branch node is always a pointer"
+  [node]
+  (not (pointer? (get node 0))))
+
+(defn compare-search-keys
+  "Given a search key `first` and a search key `second`, returns 1 if
+  first comes after second, 0 if the second is prefixed by first, and
+  -1 if first comes before second.
 
   For example:
-      (compare-to-prefix [\"a\" \"b\"] [\"b\" \"c\" \"d\"]) ;; => -1
-      (compare-to-prefix [\"b\" \"c\"] [\"b\" \"c\" \"d\"]) ;; => 0
-      (compare-to-prefix [\"c\" \"a\"] [\"b\" \"c\" \"d\"]) ;; => 1"
+      (compare-search-keys [\"a\" \"b\"] [\"b\" \"c\" \"d\"]) ;; => -1
+      (compare-search-keys [\"b\" \"c\"] [\"b\" \"c\" \"d\"]) ;; => 0
+      (compare-search-keys [\"c\" \"a\" \"b\"] [\"b\" \"c\"]) ;; => 1"
 
-  [prefix val]
-  (let [val-prefix (subvec val 0 (count prefix))]
-    (compare prefix val-prefix)))
+  [first second]
+  (let [min-length (min (count first) (count second))
+        first-trunc (subvec first 0 min-length)
+        second-trunc (subvec second 0 min-length)]
+    (compare first-trunc second-trunc)))
+
+(defn search-key-<
+  [first second]
+  (< (compare-search-keys first second) 0))
+
+(defn search-key->=
+  [first second]
+  (>= (compare-search-keys first second) 0))
 
 (defn lower-bound
   "Returns the lower bound of the region in `node` prefixed with
@@ -34,17 +42,17 @@
   [node prefix]
   (letfn [(search [node prefix left right found?]
             (if (>= left right)
-              (and found? left)
+              left
               (let [middle (+ left (quot (- right left) 2))
                     middle (if (pointer? (get node middle))
                              (inc middle)
                              middle)
                     val (get node middle)]
                 (cond
-                  (>= middle right) (and found? middle)
-                  (pos? (compare-to-prefix prefix val)) (recur node prefix (+ middle 1) right found?)
-                  (zero? (compare-to-prefix prefix val)) (recur node prefix left middle true)
-                  (neg? (compare-to-prefix prefix val)) (recur node prefix left middle found?)))))]
+                  (>= middle right) middle
+                  (pos? (compare-search-keys prefix val)) (recur node prefix (+ middle 1) right found?)
+                  (zero? (compare-search-keys prefix val)) (recur node prefix left middle true)
+                  (neg? (compare-search-keys prefix val)) (recur node prefix left middle found?)))))]
     (search node prefix 0 (count node) nil)))
 
 (defn upper-bound
@@ -56,20 +64,20 @@
   [node prefix]
   (letfn [(search [node prefix left right found?]
             (if (>= left right)
-              (and found? left)
+              left
               (let [middle (+ left (quot (- right left) 2))
                     middle (if (pointer? (get node middle))
                              (inc middle)
                              middle)
                     val (get node middle)]
                 (cond
-                  (>= middle right) (and found? middle)
-                  (neg? (compare-to-prefix prefix val)) (recur node prefix left middle found?)
-                  (zero? (compare-to-prefix prefix val)) (recur node prefix (+ middle 1) right true)
-                  (pos? (compare-to-prefix prefix val)) (recur node prefix
-                                                               (+ middle 1)
-                                                               right
-                                                               found?)))))]
+                  (>= middle right) middle
+                  (neg? (compare-search-keys prefix val)) (recur node prefix left middle found?)
+                  (zero? (compare-search-keys prefix val)) (recur node prefix (+ middle 1) right true)
+                  (pos? (compare-search-keys prefix val)) (recur node prefix
+                                                                 (+ middle 1)
+                                                                 right
+                                                                 found?)))))]
     (search node prefix 0 (count node) nil)))
 
 
@@ -100,34 +108,63 @@
   (let [root (store/get (:store tree) (:root-key tree))]
     (search-iter (:store tree) root prefix [])))
 
-(defn find-node-for
-  [node value]
-  ;; Base case: value is already in node or node has no children that
-  ;; could contain the value
-  ;;
-  ;; Otherwise, recurse into the child that could contain the value
-  ;; Return the found node plus the path we took to get there?
-  )
+(defn find-leaf-for
+  "Returns a vector whose first element is the leaf node that should
+  contain `value` and whose second element is a vector of the path of
+  node pointer keys we took to arrive at the leaf (most recent pointer
+  key last)"
+  [store node value]
+  (letfn [(find-leaf-iter [node value path]
+            (if (leaf? node)
+              [node path]
+              (let [lower-sep-idx (lower-bound node value)
+                    upper-sep-idx (upper-bound node value)
+                    child-ptr-idx (+ lower-sep-idx (quot (- upper-sep-idx
+                                                            lower-sep-idx)
+                                                         2))
+                    child-ptr (get node child-ptr-idx)
+                    ;; If we found a separator key, figure out which
+                    ;; side of it to recurse down. If we overshot the
+                    ;; length of the node, recurse into its last child
+                    child-ptr
+                    (cond
+                      (> child-ptr-idx (dec (count node))) (peek node)
+                      (pointer? child-ptr) child-ptr
+                      :else (if (search-key-< value child-ptr)
+                              (get node (dec child-ptr-idx))
+                              (get node (inc child-ptr-idx))))]
+                (recur (store/get store child-ptr)
+                       value
+                       (conj path child-ptr)))))]
+    (find-leaf-iter node value [])))
 
 (defn insert!
   "Inserts `key` into `tree`, rebalancing the tree if necessary."
   [tree value]
-  ;; Find the node that the value belongs in by traversing the tree
-  ;; using binary search on the value to be inserted until we find a
-  ;; node with no children
+  ;; First search the tree to find the leaf that the value belongs in
   ;;
-  ;; If there is room in the node, just insert the value
+  ;; If there is space in that leaf, simply insert the value at the
+  ;; correct point in the leaf and write the leaf node back to the K/V
+  ;; store
   ;;
-  ;; If there's not room in the node (its length is >= 2*order - 1,
-  ;; e.g. it contains <order> child pointers and <order - 1>
-  ;; elements), split the current node into two nodes, one of which
-  ;; will contain the new value. Then update the parent node to have a
-  ;; pointer to the new node and the central value of the old node
+  ;; If the leaf node is full after insertion of the new value (length
+  ;; > 2*order - 1), split the leaf node on the mid point into two
+  ;; leaf nodes, determine the shortest possible separator key between
+  ;; the two nodes, and insert that separator key as well as a pointer
+  ;; to the new leaf node at the appropriate place in the parent
+  ;; node. The original leaf node can be reused for one of the new
+  ;; leaf nodes. This step requires a pointer to the parent node.
   ;;
-  ;; If this operation causes the parent node to be too big, repeat the operation
+  ;; If the parent node is full after insertion of the new separator
+  ;; key (length > 2*order - 1), then it too splits and a new
+  ;; separator key/child pointer is put into its parent. This process
+  ;; repeats recursively until the parent has space, or we reach the
+  ;; root node. If it is the root node, a new root node is created -
+  ;; in this special case, the new root node needs to have the root
+  ;; pointer set to point to it and the old root node needs a new
+  ;; pointer generated.
   ;;
-  ;; If we recurse all the way to the root, it splits in two as well
-  ;; and a new root node is created
+  ;; (insert!) should return the updated btree object
   (let [root (store/get (:store tree) (:root-key tree))]
     ))
 
