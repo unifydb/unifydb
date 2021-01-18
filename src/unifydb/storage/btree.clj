@@ -1,6 +1,7 @@
 (ns unifydb.storage.btree
   "An implementation of a b-tree built on top of a KV store"
-  (:require [unifydb.storage :as store]))
+  (:require [unifydb.storage :as store])
+  (:import [java.util UUID]))
 
 (defn pointer?
   "Pointers in b-tree nodes are strings, whereas values are vectors."
@@ -114,22 +115,80 @@
   could contain `value` and whose second element is a vector of the
   path of node pointer keys we took to arrive at the leaf (most recent
   pointer key last)"
-  [store node value]
-  (letfn [(find-leaf-iter [node value path]
-            (if (leaf? node)
-              [node path]
-              (let [lower-sep-idx (lower-bound node value)
-                    child-ptr-idx (cond
-                                    (>= lower-sep-idx (count node)) (dec (count node))
-                                    (search-key-<
-                                     value
-                                     (get node lower-sep-idx)) (dec lower-sep-idx)
-                                    :else (inc lower-sep-idx))
-                    child-ptr (get node child-ptr-idx)]
-                (recur (store/get store child-ptr)
-                       value
-                       (conj path child-ptr)))))]
-    (find-leaf-iter node value [])))
+  [store node value path]
+  (if (leaf? node)
+    [node path]
+    (let [lower-sep-idx (lower-bound node value)
+          child-ptr-idx (cond
+                          (>= lower-sep-idx (count node)) (dec (count node))
+                          (search-key-<
+                           value
+                           (get node lower-sep-idx)) (dec lower-sep-idx)
+                          :else (inc lower-sep-idx))
+          child-ptr (get node child-ptr-idx)]
+      (recur store
+             (store/get store child-ptr)
+             value
+             (conj path child-ptr)))))
+
+(defn generate-node-id
+  []
+  (str (UUID/randomUUID)))
+
+(defn separator-for
+  "Returns the shortest search key that separates the nodes `lower`
+  and `upper`."
+  [lower upper]
+  (letfn [(find-common-prefix [a b acc]
+            (if (not= (first a) (first b))
+              (if (empty? acc)
+                [(first b)]
+                acc)
+              (recur (rest a) (rest b) (conj acc (first b)))))]
+    (let [a (peek lower)
+          b (first upper)]
+      (find-common-prefix a b []))))
+
+(defn insert-into
+  "Inserts `value` into `node`, splitting the node if
+  necessary. `value` should be a vector of values to insert; the first
+  element determines where the values will be inserted.  Returns a map
+  of node keys to new node values to be written to the store."
+  [tree node value path-from-root]
+  ;; Base case: path-from-root is empty, meaning we are at the root
+  ;;
+  ;; Find index at which to insert value and put it in
+  ;;
+  ;; If the node is now too big, split it and use insert-into! to put
+  ;; a separator key in the parent
+  (letfn [(insert-into-iter [node value path-from-root acc]
+            (let [node-key (peek path-from-root)
+                  parent-path-from-root (pop path-from-root)
+                  search-key (first value)
+                  target-idx (lower-bound node search-key)
+                  [lower upper] (split-at target-idx node)
+                  node (if (= (get node target-idx) value)
+                         node
+                         (vec (concat lower value upper)))]
+              (if (> (count node) (- (* 2 (:order tree)) 1))
+                (let [[lower upper] (split-at (/ (count node) 2) node)
+                      new-key (generate-node-id)
+                      separator (separator-for lower upper)
+                      ;; TODO handle splitting root (changing root key)
+                      parent-id (peek parent-path-from-root)
+                      parent (store/get (:store tree) parent-id)]
+                  (if (empty? parent-path-from-root)
+                    (let [new-lower-key (generate-node-id)
+                          new-root [new-lower-key separator new-key]]
+                      (assoc acc
+                             (:root-key tree) new-root
+                             new-lower-key lower
+                             new-key upper))
+                    (assoc (insert-into-iter parent [separator new-key] parent-path-from-root acc)
+                           node-key lower
+                           new-key upper)))
+                (assoc acc node-key node))))]
+    (insert-into-iter node value path-from-root {})))
 
 (defn insert!
   "Inserts `key` into `tree`, rebalancing the tree if necessary."
@@ -158,8 +217,12 @@
   ;; pointer generated.
   ;;
   ;; (insert!) should return the updated btree object
-  (let [root (store/get (:store tree) (:root-key tree))]
-    ))
+  (let [root (store/get (:store tree) (:root-key tree))
+        [leaf path] (find-leaf-for (:store tree) root value [(:root-key tree)])
+        modifications (insert-into tree leaf value path)]
+    (doseq [[key node] modifications]
+      (store/assoc! (:store tree) key node))
+    tree))
 
 (defn delete!
   "Deletes `key` from `tree`, rebalancing the tree if necessary."

@@ -23,27 +23,28 @@
     (doseq [{:keys [value expected-node expected-path]}
             [{:value ["a" "b" "b" "a"]
               :expected-node [["a" "b" "b" "a"] ["a" "b" "b" "b"]]
-              :expected-path ["1"]}
+              :expected-path ["root" "1"]}
              {:value ["a" "a" "a" "a"]
               :expected-node [["a" "a" "a" "a"]]
-              :expected-path ["0"]}
+              :expected-path ["root" "0"]}
              {:value ["a" "a" "b" "a"]
               :expected-node [["a" "a" "a" "a"]]
-              :expected-path ["0"]}
+              :expected-path ["root" "0"]}
              {:value ["a" "f" "a" "b"]
               :expected-node [["a" "e" "a" "b"] ["a" "e" "b" "a"]]
-              :expected-path ["4"]}
+              :expected-path ["root" "4"]}
              {:value ["a" "b" "c" "d"]
               :expected-node [["a" "b" "c" "a"]]
-              :expected-path ["2"]}
+              :expected-path ["root" "2"]}
              {:value ["a" "b"]
               :expected-node [["a" "a" "a" "a"]]
-              :expected-path ["0"]}]]
+              :expected-path ["root" "0"]}]]
       (t/testing (str "Finding leaf for " value)
         (t/is (= [expected-node expected-path]
                  (btree/find-leaf-for store
                                       (store/get store "root")
-                                      value)))))))
+                                      value
+                                      ["root"])))))))
 
 ;; TODO this is broken, it's searching a b-tree not a b+ tree
 (t/deftest test-search
