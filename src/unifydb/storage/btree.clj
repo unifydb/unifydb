@@ -14,33 +14,35 @@
 
 (defn compare-search-keys
   "Given a search key `first` and a search key `second`, returns 1 if
-  first comes after second, 0 if the second is prefixed by first, and
-  -1 if first comes before second.
+  first comes after second and -1 if first comes before second. Note
+  that this never returns zero: if the search keys are the same, it
+  returns 1 since a separator keys guarantees that the right child
+  pointer contains all values greater than or equal to it.
 
   For example:
-      (compare-search-keys [\"a\" \"b\"] [\"b\" \"c\" \"d\"]) ;; => -1
-      (compare-search-keys [\"b\" \"c\"] [\"b\" \"c\" \"d\"]) ;; => 0
-      (compare-search-keys [\"c\" \"a\" \"b\"] [\"b\" \"c\"]) ;; => 1"
+      (compare-search-keys [\"a\" \"b\" \"c\"] [\"a\" \"b\"])       ;; => 1
+      (compare-search-keys [\"a\" \"b\"] [\"a\" \"b\" \"c\"])       ;; => -1
+      (compare-search-keys [\"a\" \"b\"] [\"b\" \"c\" \"d\"])       ;; => -1
+      (compare-search-keys [\"b\" \"c\" \"d\"] [\"b\" \"c\" \"d\"]) ;; => 1
+      (compare-search-keys [\"c\" \"a\" \"b\"] [\"b\" \"c\"])       ;; => 1"
 
   [first second]
   (let [min-length (min (count first) (count second))
         first-trunc (subvec first 0 min-length)
-        second-trunc (subvec second 0 min-length)]
-    (compare first-trunc second-trunc)))
+        second-trunc (subvec second 0 min-length)
+        zero-val (if (>= (count first) (count second)) 1 -1)
+        comparison (compare first-trunc second-trunc)]
+    (if (zero? comparison) zero-val comparison)))
 
 (defn search-key-<
   [first second]
   (< (compare-search-keys first second) 0))
 
-(defn search-key->=
-  [first second]
-  (>= (compare-search-keys first second) 0))
-
 (defn lower-bound
   "Returns the lower bound of the region in `node` prefixed with
-  `prefix`. Returns `nil` if no values in `node` have the `prefix`."
+  `prefix`."
   [node prefix]
-  (letfn [(search [node prefix left right found?]
+  (letfn [(search [node prefix left right]
             (if (>= left right)
               left
               (let [middle (+ left (quot (- right left) 2))
@@ -50,10 +52,10 @@
                     val (get node middle)]
                 (cond
                   (>= middle right) middle
-                  (pos? (compare-search-keys prefix val)) (recur node prefix (+ middle 1) right found?)
-                  (zero? (compare-search-keys prefix val)) (recur node prefix left middle true)
-                  (neg? (compare-search-keys prefix val)) (recur node prefix left middle found?)))))]
-    (search node prefix 0 (count node) nil)))
+                  (pos? (compare-search-keys prefix val)) (recur node prefix (+ middle 1) right)
+                  (zero? (compare-search-keys prefix val)) (recur node prefix left middle)
+                  (neg? (compare-search-keys prefix val)) (recur node prefix left middle)))))]
+    (search node prefix 0 (count node))))
 
 (defn upper-bound
   "Returns the upper bound of the region in `node` prefixed with
@@ -62,7 +64,7 @@
   last prefixed value + 1, so that (subvec node lower-bound
   upper-bound) returns the prefixed section."
   [node prefix]
-  (letfn [(search [node prefix left right found?]
+  (letfn [(search [node prefix left right]
             (if (>= left right)
               left
               (let [middle (+ left (quot (- right left) 2))
@@ -72,13 +74,12 @@
                     val (get node middle)]
                 (cond
                   (>= middle right) middle
-                  (neg? (compare-search-keys prefix val)) (recur node prefix left middle found?)
-                  (zero? (compare-search-keys prefix val)) (recur node prefix (+ middle 1) right true)
+                  (neg? (compare-search-keys prefix val)) (recur node prefix left middle)
+                  (zero? (compare-search-keys prefix val)) (recur node prefix (+ middle 1) right)
                   (pos? (compare-search-keys prefix val)) (recur node prefix
                                                                  (+ middle 1)
-                                                                 right
-                                                                 found?)))))]
-    (search node prefix 0 (count node) nil)))
+                                                                 right)))))]
+    (search node prefix 0 (count node))))
 
 
 (defn search-iter
@@ -109,30 +110,22 @@
     (search-iter (:store tree) root prefix [])))
 
 (defn find-leaf-for
-  "Returns a vector whose first element is the leaf node that should
-  contain `value` and whose second element is a vector of the path of
-  node pointer keys we took to arrive at the leaf (most recent pointer
-  key last)"
+  "Returns a vector whose first element is the smallest leaf node that
+  could contain `value` and whose second element is a vector of the
+  path of node pointer keys we took to arrive at the leaf (most recent
+  pointer key last)"
   [store node value]
   (letfn [(find-leaf-iter [node value path]
             (if (leaf? node)
               [node path]
               (let [lower-sep-idx (lower-bound node value)
-                    upper-sep-idx (upper-bound node value)
-                    child-ptr-idx (+ lower-sep-idx (quot (- upper-sep-idx
-                                                            lower-sep-idx)
-                                                         2))
-                    child-ptr (get node child-ptr-idx)
-                    ;; If we found a separator key, figure out which
-                    ;; side of it to recurse down. If we overshot the
-                    ;; length of the node, recurse into its last child
-                    child-ptr
-                    (cond
-                      (> child-ptr-idx (dec (count node))) (peek node)
-                      (pointer? child-ptr) child-ptr
-                      :else (if (search-key-< value child-ptr)
-                              (get node (dec child-ptr-idx))
-                              (get node (inc child-ptr-idx))))]
+                    child-ptr-idx (cond
+                                    (>= lower-sep-idx (count node)) (dec (count node))
+                                    (search-key-<
+                                     value
+                                     (get node lower-sep-idx)) (dec lower-sep-idx)
+                                    :else (inc lower-sep-idx))
+                    child-ptr (get node child-ptr-idx)]
                 (recur (store/get store child-ptr)
                        value
                        (conj path child-ptr)))))]

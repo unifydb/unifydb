@@ -35,7 +35,10 @@
               :expected-path ["4"]}
              {:value ["a" "b" "c" "d"]
               :expected-node [["a" "b" "c" "a"]]
-              :expected-path ["2"]}]]
+              :expected-path ["2"]}
+             {:value ["a" "b"]
+              :expected-node [["a" "a" "a" "a"]]
+              :expected-path ["0"]}]]
       (t/testing (str "Finding leaf for " value)
         (t/is (= [expected-node expected-path]
                  (btree/find-leaf-for store
