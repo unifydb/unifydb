@@ -16,10 +16,18 @@
   [node]
   (:neighbor node))
 
+(defn node-get
+  [node index]
+  (get (node-values node) index))
+
+(defn node-count
+  [node]
+  (count (node-values node)))
+
 (defn leaf?
   "The first value of a branch node is always a pointer"
   [node]
-  (not (pointer? (get (node-values node) 0))))
+  (not (pointer? (node-get node 0))))
 
 (defn compare-search-keys
   "Given a search key `first` and a search key `second`, returns 1 if
@@ -55,16 +63,16 @@
             (if (>= left right)
               left
               (let [middle (+ left (quot (- right left) 2))
-                    middle (if (pointer? (get (node-values node) middle))
+                    middle (if (pointer? (node-get node middle))
                              (inc middle)
                              middle)
-                    val (get (node-values node) middle)]
+                    val (node-get node middle)]
                 (cond
                   (>= middle right) middle
                   (pos? (compare-search-keys prefix val)) (recur node prefix (+ middle 1) right)
                   (zero? (compare-search-keys prefix val)) (recur node prefix left middle)
                   (neg? (compare-search-keys prefix val)) (recur node prefix left middle)))))]
-    (search node prefix 0 (count (node-values node)))))
+    (search node prefix 0 (node-count node))))
 
 (defn upper-bound
   "Returns the upper bound of the region in `node` prefixed with
@@ -77,10 +85,10 @@
             (if (>= left right)
               left
               (let [middle (+ left (quot (- right left) 2))
-                    middle (if (pointer? (get (node-values node) middle))
+                    middle (if (pointer? (node-get node middle))
                              (inc middle)
                              middle)
-                    val (get (node-values node) middle)]
+                    val (node-get node middle)]
                 (cond
                   (>= middle right) middle
                   (neg? (compare-search-keys prefix val)) (recur node prefix left middle)
@@ -88,7 +96,7 @@
                   (pos? (compare-search-keys prefix val)) (recur node prefix
                                                                  (+ middle 1)
                                                                  right)))))]
-    (search node prefix 0 (count (node-values node)))))
+    (search node prefix 0 (node-count node))))
 
 
 (defn search-iter
@@ -129,12 +137,12 @@
     (let [lower-sep-idx (lower-bound node value)
           child-ptr-idx (cond
                           (>= lower-sep-idx
-                              (count (node-values node))) (dec (count (node-values node)))
+                              (node-count node)) (dec (node-count node))
                           (search-key-<
                            value
-                           (get (node-values node) lower-sep-idx)) (dec lower-sep-idx)
+                           (node-get node lower-sep-idx)) (dec lower-sep-idx)
                           :else (inc lower-sep-idx))
-          child-ptr (get (node-values node) child-ptr-idx)]
+          child-ptr (node-get node child-ptr-idx)]
       (recur store
              (store/get store child-ptr)
              value
@@ -186,20 +194,20 @@
                   search-key (first value)
                   target-idx (lower-bound node search-key)
                   [lower upper] (map vec (split-at target-idx (node-values node)))
-                  node (if (= (get (node-values node) target-idx) value)
+                  node (if (= (node-get node target-idx) value)
                          node
                          (assoc node :values (vec (concat lower value upper))))]
               (if (or (and (leaf? node)
-                           (> (count (node-values node)) (- (:order tree) 1)))
-                      (> (count (node-values node)) (- (* 2 (:order tree)) 1)))
+                           (> (node-count node) (- (:order tree) 1)))
+                      (> (node-count node) (- (* 2 (:order tree)) 1)))
                 (let [[lower upper] (if (leaf? node)
-                                      (map vec (split-at (quot (count (node-values node)) 2)
+                                      (map vec (split-at (quot (node-count node) 2)
                                                          (node-values node)))
                                       [(subvec (node-values node)
                                                0
-                                               (quot (count (node-values node)) 2))
+                                               (quot (node-count node) 2))
                                        (subvec (node-values node)
-                                               (+ (quot (count (node-values node)) 2) 1))])
+                                               (+ (quot (node-count node) 2) 1))])
                       new-key ((:id-generator tree))
                       lower-node (if (leaf? node)
                                    {:values lower :neighbor new-key}
