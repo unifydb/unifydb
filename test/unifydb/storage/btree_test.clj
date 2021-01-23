@@ -46,6 +46,51 @@
                                       value
                                       ["root"])))))))
 
+(t/deftest test-insert!
+  (doseq [{:keys [insertions expected-state order]
+           :or {order 3}}
+          [{:insertions [["a" "b" "c"]]
+            :expected-state {"root" [["a" "b" "c"]]}}
+           {:insertions [["a" "b" "c"]
+                         ["a" "b" "a"]
+                         ["a" "b" "d"]
+                         ["a" "b" "e"]
+                         ["a" "c" "a"]
+                         ["a" "c" "b"]]
+            :expected-state {"root" ["1" ["a" "b" "e"] "2"]
+                             "1" [["a" "b" "a"]
+                                  ["a" "b" "c"]
+                                  ["a" "b" "d"]]
+                             "2" [["a" "b" "e"]
+                                  ["a" "c" "a"]
+                                  ["a" "c" "b"]]}}
+           {:insertions [["a" "b" "c"]
+                         ["a" "b" "a"]
+                         ["a" "b" "d"]
+                         ["a" "b" "e"]
+                         ["a" "c" "a"]
+                         ["a" "c" "b"]
+                         ["a" "c" "c"]
+                         ["a" "a" "b"]
+                         ["a" "d" "a"]
+                         ["b" "a" "a"]
+                         ["c" "a" "b"]
+                         ["a" "d" "b"]
+                         ["c" "b" "a"]
+                         ["d" "a" "c"]
+                         ["b" "d" "a"]]
+            :expected-state {"root" []
+                             "1" []
+                             "2" []
+                             "3" []}}]]
+    (let [id-counter (atom 0)
+          id-generator (fn [] (str (swap! id-counter inc)))
+          store (memstore/new)
+          tree (btree/new! store "root" order id-generator)
+          tree (reduce btree/insert! tree insertions)]
+      (t/testing (format "Insert - insertions: %s, order: %s" insertions order)
+        (t/is (= expected-state @(:state (:store tree))))))))
+
 ;; TODO this is broken, it's searching a b-tree not a b+ tree
 (t/deftest test-search
   (t/testing "Searching"

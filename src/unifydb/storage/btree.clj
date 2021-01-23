@@ -143,7 +143,7 @@
             (if (not= (first a) (first b))
               (if (empty? acc)
                 [(first b)]
-                acc)
+                (conj acc (first b)))
               (recur (rest a) (rest b) (conj acc (first b)))))]
     (let [a (peek lower)
           b (first upper)]
@@ -166,24 +166,23 @@
                   parent-path-from-root (pop path-from-root)
                   search-key (first value)
                   target-idx (lower-bound node search-key)
-                  [lower upper] (split-at target-idx node)
+                  [lower upper] (map vec (split-at target-idx node))
                   node (if (= (get node target-idx) value)
                          node
                          (vec (concat lower value upper)))]
               (if (> (count node) (- (* 2 (:order tree)) 1))
-                (let [[lower upper] (split-at (/ (count node) 2) node)
-                      new-key (generate-node-id)
+                (let [[lower upper] (map vec (split-at (/ (count node) 2) node))
+                      new-key ((:id-generator tree))
                       separator (separator-for lower upper)
-                      ;; TODO handle splitting root (changing root key)
                       parent-id (peek parent-path-from-root)
                       parent (store/get (:store tree) parent-id)]
                   (if (empty? parent-path-from-root)
-                    (let [new-lower-key (generate-node-id)
-                          new-root [new-lower-key separator new-key]]
+                    (let [new-upper-key ((:id-generator tree))
+                          new-root [new-key separator new-upper-key]]
                       (assoc acc
                              (:root-key tree) new-root
-                             new-lower-key lower
-                             new-key upper))
+                             new-key lower
+                             new-upper-key upper))
                     (assoc (insert-into-iter parent [separator new-key] parent-path-from-root acc)
                            node-key lower
                            new-key upper)))
@@ -219,7 +218,7 @@
   ;; (insert!) should return the updated btree object
   (let [root (store/get (:store tree) (:root-key tree))
         [leaf path] (find-leaf-for (:store tree) root value [(:root-key tree)])
-        modifications (insert-into tree leaf value path)]
+        modifications (insert-into tree leaf [value] path)]
     (doseq [[key node] modifications]
       (store/assoc! (:store tree) key node))
     tree))
@@ -232,9 +231,12 @@
   "Instantiates a new `store`-backed b-tree with order
   `order` whose root node is the value in the KV-store with key
   `root-key`. If the root node does not exist, it is created."
-  [store root-key order]
-  (when-not (store/contains? store root-key)
-    (store/assoc! store root-key []))
-  {:store store
-   :order order
-   :root-key root-key})
+  ([store root-key order]
+   (new! store root-key order generate-node-id))
+  ([store root-key order id-generator]
+   (when-not (store/contains? store root-key)
+     (store/assoc! store root-key []))
+   {:store store
+    :order order
+    :root-key root-key
+    :id-generator id-generator}))
