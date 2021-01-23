@@ -138,15 +138,25 @@
 (defn separator-for
   "Returns the shortest search key that separates the nodes `lower`
   and `upper`."
-  [lower upper]
-  (letfn [(find-common-prefix [a b acc]
+  [tree lower upper]
+  (letfn [(greatest-value [node]
+            (if (not (pointer? (peek node)))
+              (peek node)
+              (let [child (store/get (:store tree) (peek node))]
+                (recur child))))
+          (least-value [node]
+            (if (not (pointer? (first node)))
+              (first node)
+              (let [child (store/get (:store tree) (first node))]
+                (recur child))))
+          (find-common-prefix [a b acc]
             (if (not= (first a) (first b))
               (if (empty? acc)
                 [(first b)]
                 (conj acc (first b)))
               (recur (rest a) (rest b) (conj acc (first b)))))]
-    (let [a (peek lower)
-          b (first upper)]
+    (let [a (greatest-value lower)
+          b (least-value upper)]
       (find-common-prefix a b []))))
 
 (defn insert-into
@@ -170,10 +180,15 @@
                   node (if (= (get node target-idx) value)
                          node
                          (vec (concat lower value upper)))]
-              (if (> (count node) (- (* 2 (:order tree)) 1))
-                (let [[lower upper] (map vec (split-at (/ (count node) 2) node))
+              (if (or (and (leaf? node)
+                           (> (count node) (- (:order tree) 1)))
+                      (> (count node) (- (* 2 (:order tree)) 1)))
+                (let [[lower upper] (if (leaf? node)
+                                      (map vec (split-at (quot (count node) 2) node))
+                                      [(subvec node 0 (quot (count node) 2))
+                                       (subvec node (+ (quot (count node) 2) 1))])
                       new-key ((:id-generator tree))
-                      separator (separator-for lower upper)
+                      separator (separator-for tree lower upper)
                       parent-id (peek parent-path-from-root)
                       parent (store/get (:store tree) parent-id)]
                   (if (empty? parent-path-from-root)

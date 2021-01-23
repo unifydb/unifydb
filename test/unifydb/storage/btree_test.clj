@@ -57,13 +57,14 @@
                          ["a" "b" "e"]
                          ["a" "c" "a"]
                          ["a" "c" "b"]]
-            :expected-state {"root" ["1" ["a" "b" "e"] "2"]
-                             "1" [["a" "b" "a"]
-                                  ["a" "b" "c"]
-                                  ["a" "b" "d"]]
-                             "2" [["a" "b" "e"]
-                                  ["a" "c" "a"]
-                                  ["a" "c" "b"]]}}
+            :expected-state {"root" ["5" ["a" "b" "d"] "6"],
+                             "1" [["a" "b" "a"]],
+                             "2" [["a" "b" "c"]],
+                             "3" [["a" "b" "d"]],
+                             "5" ["1" ["a" "b" "c"] "2"],
+                             "6" ["3" ["a" "b" "e"] "4" ["a" "c"] "7"],
+                             "4" [["a" "b" "e"]],
+                             "7" [["a" "c" "a"] ["a" "c" "b"]]}}
            {:insertions [["a" "b" "c"]
                          ["a" "b" "a"]
                          ["a" "b" "d"]
@@ -79,15 +80,31 @@
                          ["c" "b" "a"]
                          ["d" "a" "c"]
                          ["b" "d" "a"]]
-            :expected-state {"root" []
-                             "1" []
-                             "2" []
-                             "3" []}}]]
+            :expected-state {"9" ["7" ["a" "c" "b"] "8"],
+                             "3" [["a" "b" "d"]],
+                             "4" [["a" "b" "e"]],
+                             "8" [["a" "c" "b"]],
+                             "14" ["9" ["a" "c" "c"] "12" ["b"] "17"],
+                             "root" ["13" ["a" "c"] "14"],
+                             "17" ["15" ["c"] "16" ["c" "b"] "18"],
+                             "15" [["b" "a" "a"] ["b" "d" "a"]],
+                             "7" [["a" "c" "a"]],
+                             "5" ["1" ["a" "b" "c"] "2"],
+                             "18" [["c" "b" "a"] ["d" "a" "c"]],
+                             "12" ["10" ["a" "d"] "11"],
+                             "13" ["5" ["a" "b" "d"] "6"],
+                             "6" ["3" ["a" "b" "e"] "4"],
+                             "1" [["a" "a" "b"] ["a" "b" "a"]],
+                             "11" [["a" "d" "a"] ["a" "d" "b"]],
+                             "2" [["a" "b" "c"]],
+                             "16" [["c" "a" "b"]],
+                             "10" [["a" "c" "c"]]}}]]
     (let [id-counter (atom 0)
           id-generator (fn [] (str (swap! id-counter inc)))
           store (memstore/new)
-          tree (btree/new! store "root" order id-generator)
-          tree (reduce btree/insert! tree insertions)]
+          tree (btree/new! store "root" order id-generator)]
+      (doseq [value insertions]
+        (btree/insert! tree value))
       (t/testing (format "Insert - insertions: %s, order: %s" insertions order)
         (t/is (= expected-state @(:state (:store tree))))))))
 
