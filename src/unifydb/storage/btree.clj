@@ -98,34 +98,6 @@
                                                                  right)))))]
     (search node prefix 0 (node-count node))))
 
-
-(defn search-iter
-  [store node prefix acc]
-  (let [lower-bound (lower-bound node prefix)
-        upper-bound (upper-bound node prefix)
-        lower-bound (if (pointer? (get node (dec lower-bound)))
-                      (dec lower-bound)
-                      lower-bound)
-        upper-bound (if (pointer? (get node upper-bound))
-                      (inc upper-bound)
-                      upper-bound)]
-    (if (and lower-bound upper-bound)
-      (vec
-       (concat acc
-               (mapcat (fn [val]
-                         (if (pointer? val)
-                           (let [child (store/get store val)]
-                             (search-iter store child prefix acc))
-                           [val]))
-                       (subvec node lower-bound upper-bound))))
-      acc)))
-
-(defn search
-  "Searchs `tree`, returning all keys that start with `prefix`."
-  [tree prefix]
-  (let [root (store/get (:store tree) (:root-key tree))]
-    (search-iter (:store tree) root prefix [])))
-
 (defn find-leaf-for
   "Returns a vector whose first element is the smallest leaf node that
   could contain `value` and whose second element is a vector of the
@@ -147,6 +119,25 @@
              (store/get store child-ptr)
              value
              (conj path child-ptr)))))
+
+(defn prefixed-by?
+  [value prefix]
+  (= (subvec value 0 (count prefix)) prefix))
+
+(defn search
+  "Searchs `tree`, returning all keys that start with `prefix`."
+  [tree prefix]
+  (letfn [(search-iter [node acc]
+            (let [start-idx (lower-bound node prefix)]
+              (if (and (node-neighbor node)
+                       (prefixed-by? (peek (node-values node)) prefix))
+                (recur (store/get (:store tree) (node-neighbor node))
+                       (concat acc (subvec (node-values node) start-idx)))
+                (concat acc (for [val (subvec (node-values node) start-idx)
+                                  :while (prefixed-by? val prefix)] val)))))]
+    (let [root (store/get (:store tree) (:root-key tree))
+          [leaf _] (find-leaf-for (:store tree) root prefix [(:root-key tree)])]
+      (vec (search-iter leaf [])))))
 
 (defn generate-node-id
   []
@@ -218,7 +209,8 @@
                       parent (store/get (:store tree) parent-id)]
                   (if (empty? parent-path-from-root)
                     (let [new-upper-key ((:id-generator tree))
-                          new-root [new-key separator new-upper-key]]
+                          new-root [new-key separator new-upper-key]
+                          lower-node (assoc lower-node :neighbor new-upper-key)]
                       (assoc acc
                              (:root-key tree) {:values new-root}
                              new-key lower-node

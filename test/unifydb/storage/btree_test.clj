@@ -57,13 +57,13 @@
                          ["a" "b" "e"]
                          ["a" "c" "a"]
                          ["a" "c" "b"]]
-            :expected-state {"root" {:values ["5" ["a" "b" "d"] "6"]},
-                             "1" {:values [["a" "b" "a"]], :neighbor "1"},
-                             "2" {:values [["a" "b" "c"]], :neighbor "3"},
-                             "3" {:values [["a" "b" "d"]], :neighbor "4"},
-                             "5" {:values ["1" ["a" "b" "c"] "2"]},
-                             "6" {:values ["3" ["a" "b" "e"] "4" ["a" "c"] "7"]},
-                             "4" {:values [["a" "b" "e"]], :neighbor "7"},
+            :expected-state {"root" {:values ["5" ["a" "b" "d"] "6"]}
+                             "1" {:values [["a" "b" "a"]] :neighbor "2"}
+                             "2" {:values [["a" "b" "c"]] :neighbor "3"}
+                             "3" {:values [["a" "b" "d"]] :neighbor "4"}
+                             "5" {:values ["1" ["a" "b" "c"] "2"] :neighbor "6"}
+                             "6" {:values ["3" ["a" "b" "e"] "4" ["a" "c"] "7"]}
+                             "4" {:values [["a" "b" "e"]] :neighbor "7"}
                              "7" {:values [["a" "c" "a"] ["a" "c" "b"]]}}}
            {:insertions [["a" "b" "c"]
                          ["a" "b" "a"]
@@ -80,25 +80,25 @@
                          ["c" "b" "a"]
                          ["d" "a" "c"]
                          ["b" "d" "a"]]
-            :expected-state {"9" {:values ["7" ["a" "c" "b"] "8"]},
-                             "3" {:values [["a" "b" "d"]], :neighbor "4"},
-                             "4" {:values [["a" "b" "e"]], :neighbor "7"},
-                             "8" {:values [["a" "c" "b"]], :neighbor "10"},
-                             "14" {:values ["9" ["a" "c" "c"] "12" ["b"] "17"]},
-                             "root" {:values ["13" ["a" "c"] "14"]},
-                             "17" {:values ["15" ["c"] "16" ["c" "b"] "18"]},
-                             "15" {:values [["b" "a" "a"] ["b" "d" "a"]], :neighbor "16"},
-                             "7" {:values [["a" "c" "a"]], :neighbor "8"},
-                             "5" {:values ["1" ["a" "b" "c"] "2"]},
-                             "18" {:values [["c" "b" "a"] ["d" "a" "c"]]},
-                             "12" {:values ["10" ["a" "d"] "11"]},
-                             "13" {:values ["5" ["a" "b" "d"] "6"]},
-                             "6" {:values ["3" ["a" "b" "e"] "4"]},
-                             "1" {:values [["a" "a" "b"] ["a" "b" "a"]], :neighbor "1"},
-                             "11" {:values [["a" "d" "a"] ["a" "d" "b"]], :neighbor "15"},
-                             "2" {:values [["a" "b" "c"]], :neighbor "3"},
-                             "16" {:values [["c" "a" "b"]], :neighbor "18"},
-                             "10" {:values [["a" "c" "c"]], :neighbor "11"}}}]]
+            :expected-state {"root" {:values ["13" ["a" "c"] "14"]}
+                             "1" {:values [["a" "a" "b"] ["a" "b" "a"]] :neighbor "2"}
+                             "2" {:values [["a" "b" "c"]] :neighbor "3"}
+                             "3" {:values [["a" "b" "d"]] :neighbor "4"}
+                             "4" {:values [["a" "b" "e"]] :neighbor "7"}
+                             "5" {:values ["1" ["a" "b" "c"] "2"] :neighbor "6"}
+                             "6" {:values ["3" ["a" "b" "e"] "4"]}
+                             "7" {:values [["a" "c" "a"]] :neighbor "8"}
+                             "8" {:values [["a" "c" "b"]] :neighbor "10"}
+                             "9" {:values ["7" ["a" "c" "b"] "8"]}
+                             "10" {:values [["a" "c" "c"]] :neighbor "11"}
+                             "11" {:values [["a" "d" "a"] ["a" "d" "b"]] :neighbor "15"}
+                             "12" {:values ["10" ["a" "d"] "11"]}
+                             "13" {:values ["5" ["a" "b" "d"] "6"] :neighbor "14"}
+                             "14" {:values ["9" ["a" "c" "c"] "12" ["b"] "17"]}
+                             "15" {:values [["b" "a" "a"] ["b" "d" "a"]] :neighbor "16"}
+                             "16" {:values [["c" "a" "b"]] :neighbor "18"}
+                             "17" {:values ["15" ["c"] "16" ["c" "b"] "18"]}
+                             "18" {:values [["c" "b" "a"] ["d" "a" "c"]]}}}]]
     (let [id-counter (atom 0)
           id-generator (fn [] (str (swap! id-counter inc)))
           store (memstore/new)
@@ -112,24 +112,33 @@
 (t/deftest test-search
   (t/testing "Searching"
     (let [store (memstore/->InMemoryKeyValueStore
-                 (atom {"root" ["1"
-                                ["a" "d"]
-                                "2"
-                                ["b" "c"]
-                                "3"
-                                ["c" "c"]
-                                "4"]
-                        "1" [["a" "a"] ["a" "b"] ["a" "c"]]
-                        "2" [["a" "f"] ["b" "a"] ["b" "b"]]
-                        "3" [["b" "d"] ["c" "a"] ["c" "b"]]
-                        "4" [["c" "d"]
-                             ["d" "a"]
-                             ["d" "b"]
-                             ["d" "c"]
-                             ["d" "d"]]}))
-          btree (btree/new! store "root" 7)]
-      (t/is (= [["b" "a"]
-                ["b" "b"]
-                ["b" "c"]
-                ["b" "d"]]
-               (btree/search btree ["b"]))))))
+                 (atom {"root" {:values ["13" ["a" "c"] "14"]}
+                        "1" {:values [["a" "a" "b"] ["a" "b" "a"]] :neighbor "2"}
+                        "2" {:values [["a" "b" "c"]] :neighbor "3"}
+                        "3" {:values [["a" "b" "d"]] :neighbor "4"}
+                        "4" {:values [["a" "b" "e"]] :neighbor "7"}
+                        "5" {:values ["1" ["a" "b" "c"] "2"] :neighbor "6"}
+                        "6" {:values ["3" ["a" "b" "e"] "4"]}
+                        "7" {:values [["a" "c" "a"]] :neighbor "8"}
+                        "8" {:values [["a" "c" "b"]] :neighbor "10"}
+                        "9" {:values ["7" ["a" "c" "b"] "8"]}
+                        "10" {:values [["a" "c" "c"]] :neighbor "11"}
+                        "11" {:values [["a" "d" "a"] ["a" "d" "b"]] :neighbor "15"}
+                        "12" {:values ["10" ["a" "d"] "11"]}
+                        "13" {:values ["5" ["a" "b" "d"] "6"] :neighbor "14"}
+                        "14" {:values ["9" ["a" "c" "c"] "12" ["b"] "17"]}
+                        "15" {:values [["b" "a" "a"] ["b" "d" "a"]] :neighbor "16"}
+                        "16" {:values [["c" "a" "b"]] :neighbor "18"}
+                        "17" {:values ["15" ["c"] "16" ["c" "b"] "18"]}
+                        "18" {:values [["c" "b" "a"] ["d" "a" "c"]]}}))
+          btree (btree/new! store "root" 3)]
+      (t/is (= [["b" "a" "a"]
+                ["b" "d" "a"]]
+               (btree/search btree ["b"])))
+      (t/is (= [["a" "b" "a"]
+                ["a" "b" "c"]
+                ["a" "b" "d"]
+                ["a" "b" "e"]]
+               (btree/search btree ["a" "b"])))
+      (t/is (= [["a" "b" "c"]]
+               (btree/search btree ["a" "b" "c"]))))))
