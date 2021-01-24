@@ -177,12 +177,6 @@
   element determines where the values will be inserted.  Returns a map
   of node keys to new node values to be written to the store."
   [tree node value path-from-root]
-  ;; Base case: path-from-root is empty, meaning we are at the root
-  ;;
-  ;; Find index at which to insert value and put it in
-  ;;
-  ;; If the node is now too big, split it and use insert-into! to put
-  ;; a separator key in the parent
   (letfn [(insert-into-iter [node value path-from-root acc]
             (let [node-key (peek path-from-root)
                   parent-path-from-root (pop path-from-root)
@@ -228,30 +222,6 @@
 (defn insert!
   "Inserts `key` into `tree`, rebalancing the tree if necessary."
   [tree value]
-  ;; First search the tree to find the leaf that the value belongs in
-  ;;
-  ;; If there is space in that leaf, simply insert the value at the
-  ;; correct point in the leaf and write the leaf node back to the K/V
-  ;; store
-  ;;
-  ;; If the leaf node is full after insertion of the new value (length
-  ;; > 2*order - 1), split the leaf node on the mid point into two
-  ;; leaf nodes, determine the shortest possible separator key between
-  ;; the two nodes, and insert that separator key as well as a pointer
-  ;; to the new leaf node at the appropriate place in the parent
-  ;; node. The original leaf node can be reused for one of the new
-  ;; leaf nodes. This step requires a pointer to the parent node.
-  ;;
-  ;; If the parent node is full after insertion of the new separator
-  ;; key (length > 2*order - 1), then it too splits and a new
-  ;; separator key/child pointer is put into its parent. This process
-  ;; repeats recursively until the parent has space, or we reach the
-  ;; root node. If it is the root node, a new root node is created -
-  ;; in this special case, the new root node needs to have the root
-  ;; pointer set to point to it and the old root node needs a new
-  ;; pointer generated.
-  ;;
-  ;; (insert!) should return the updated btree object
   (let [root (store/get (:store tree) (:root-key tree))
         [leaf path] (find-leaf-for (:store tree) root value [(:root-key tree)])
         modifications (insert-into tree leaf [value] path)]
