@@ -141,4 +141,8 @@
                 ["a" "b" "e"]]
                (btree/search btree ["a" "b"])))
       (t/is (= [["a" "b" "c"]]
-               (btree/search btree ["a" "b" "c"]))))))
+               (btree/search btree ["a" "b" "c"])))
+      (t/is (= [["c" "b" "a"]]
+               (btree/search btree ["c" "b"])))
+      (t/is (= [["c" "b" "a"]]
+               (btree/search btree ["c" "b" "a"]))))))
