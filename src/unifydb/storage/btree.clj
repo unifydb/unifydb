@@ -59,7 +59,7 @@
   "Returns the lower bound of the region in `node` prefixed with
   `prefix`."
   [node prefix]
-  (letfn [(search [node prefix left right]
+  (letfn [(binary-search [node prefix left right]
             (if (>= left right)
               left
               (let [middle (+ left (quot (- right left) 2))
@@ -72,7 +72,7 @@
                   (pos? (compare-search-keys prefix val)) (recur node prefix (+ middle 1) right)
                   (zero? (compare-search-keys prefix val)) (recur node prefix left middle)
                   (neg? (compare-search-keys prefix val)) (recur node prefix left middle)))))]
-    (search node prefix 0 (node-count node))))
+    (binary-search node prefix 0 (node-count node))))
 
 (defn upper-bound
   "Returns the upper bound of the region in `node` prefixed with
@@ -128,7 +128,11 @@
   "Searchs `tree`, returning all keys that start with `prefix`."
   [tree prefix]
   (letfn [(search-iter [node acc]
-            (let [start-idx (lower-bound node prefix)]
+            (let [start-idx (lower-bound node prefix)
+                  start-idx (if (= (node-get node (max 0 (dec start-idx)))
+                                   prefix)
+                              (max 0 (dec start-idx))
+                              start-idx)]
               (if (and (node-neighbor node)
                        (prefixed-by? (peek (node-values node)) prefix))
                 (recur (store/get (:store tree) (node-neighbor node))
