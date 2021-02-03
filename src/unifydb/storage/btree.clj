@@ -77,6 +77,13 @@
     (binary-search node prefix 0 (node-count node))))
 
 (defn lower-bound-exact
+  "Like `lower-bound`, but allows for an exact match of `value`
+  instead of treating it as a search key."
+  [node value]
+  (let [bound (lower-bound node value)]
+    (if (= (node-get node (max 0 (dec bound))) value)
+      (max 0 (dec bound))
+      bound)))
 
 (defn find-leaf-for
   "Returns a vector whose first element is the smallest leaf node that
@@ -108,11 +115,7 @@
   "Searchs `tree`, returning all keys that start with `prefix`."
   [tree prefix]
   (letfn [(search-iter [node acc]
-            (let [start-idx (lower-bound node prefix)
-                  start-idx (if (= (node-get node (max 0 (dec start-idx)))
-                                   prefix)
-                              (max 0 (dec start-idx))
-                              start-idx)]
+            (let [start-idx (lower-bound-exact node prefix)]
               (if (and (node-neighbor node)
                        (prefixed-by? (peek (node-values node)) prefix))
                 (recur (store/get (:store tree) (node-neighbor node))
@@ -209,9 +212,36 @@
       (store/assoc! (:store tree) key node))
     tree))
 
+(defn delete-from
+  "Delete `value` from `node`, rebalancing the tree if necessary. Does
+  not actually mutate `tree`, but returns a map of node keys to new
+  node values."
+  [tree node value path]
+  (letfn [(delete-from-iter [node value path acc]
+            (let [node-key (peek path)
+                  idx (lower-bound-exact node value)]
+              (if (not= (node-get node idx) value)
+                acc
+                (let [new-node (update node :values
+                                       #(vec (concat
+                                              (subvec % 0 idx)
+                                              (subvec % (inc idx)))))]
+                  ;; TODO handle rebalancing tree here
+                  (assoc acc node-key new-node)))))]
+    (delete-from-iter node value path {})))
+
 (defn delete!
-  "Deletes `key` from `tree`, rebalancing the tree if necessary."
-  [tree key])
+  "Deletes `value` from `tree`, rebalancing the tree if necessary."
+  [tree value]
+  ;; Find leaf that value should be in
+  ;; If value is in leaf, remove it from leaf
+  ;; If node is now "too small" (???), merge it with its neighbor. How does this work???
+  (let [root (store/get (:store tree) (:root-key tree))
+        [leaf path] (find-leaf-for (:store tree) root value [(:root-key tree)])
+        modifications (delete-from tree leaf value path)]
+    (doseq [[key node] modifications]
+      (store/assoc! (:store tree) key node))
+    tree))
 
 (defn new!
   "Instantiates a new `store`-backed b-tree with order

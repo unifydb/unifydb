@@ -61,6 +61,7 @@
                              "1" {:values [["a" "b" "a"]] :neighbor "2"}
                              "2" {:values [["a" "b" "c"]] :neighbor "3"}
                              "3" {:values [["a" "b" "d"]] :neighbor "4"}
+                             ;; TODO this branch node shouldn't have a :neighbor
                              "5" {:values ["1" ["a" "b" "c"] "2"] :neighbor "6"}
                              "6" {:values ["3" ["a" "b" "e"] "4" ["a" "c"] "7"]}
                              "4" {:values [["a" "b" "e"]] :neighbor "7"}
@@ -145,3 +146,48 @@
                (btree/search btree ["c" "b"])))
       (t/is (= [["c" "b" "a"]]
                (btree/search btree ["c" "b" "a"]))))))
+
+(t/deftest test-delete!
+  (t/testing "Deletion"
+    (let [store (memstore/->InMemoryKeyValueStore
+                 (atom {"root" {:values ["5" ["a" "b" "d"] "6"]}
+                        "1" {:values [["a" "b" "a"]] :neighbor "2"}
+                        "2" {:values [["a" "b" "c"]] :neighbor "3"}
+                        "3" {:values [["a" "b" "d"]] :neighbor "4"}
+                        "5" {:values ["1" ["a" "b" "c"] "2"] :neighbor "6"}
+                        "6" {:values ["3" ["a" "b" "e"] "4" ["a" "c"] "7"]}
+                        "4" {:values [["a" "b" "e"]] :neighbor "7"}
+                        "7" {:values [["a" "c" "a"] ["a" "c" "b"]]}}))
+          tree (btree/new! store "root" 3)]
+      (btree/delete! tree ["a" "c" "b"])
+      (t/is (= {"root" {:values ["5" ["a" "b" "d"] "6"]}
+                "1" {:values [["a" "b" "a"]] :neighbor "2"}
+                "2" {:values [["a" "b" "c"]] :neighbor "3"}
+                "3" {:values [["a" "b" "d"]] :neighbor "4"}
+                "5" {:values ["1" ["a" "b" "c"] "2"] :neighbor "6"}
+                "6" {:values ["3" ["a" "b" "e"] "4" ["a" "c"] "7"]}
+                "4" {:values [["a" "b" "e"]] :neighbor "7"}
+                "7" {:values [["a" "c" "a"]]}}
+               @(:state (:store tree)))))
+    (let [store (memstore/->InMemoryKeyValueStore
+                 (atom {"root" {:values ["5" ["a" "b" "d"] "6"]}
+                        "1" {:values [["a" "b" "a"]] :neighbor "2"}
+                        "2" {:values [["a" "b" "c"]] :neighbor "3"}
+                        "3" {:values [["a" "b" "d"]] :neighbor "4"}
+                        "5" {:values ["1" ["a" "b" "c"] "2"] :neighbor "6"}
+                        "6" {:values ["3" ["a" "b" "e"] "4" ["a" "c"] "7"]}
+                        "4" {:values [["a" "b" "e"]] :neighbor "7"}
+                        "7" {:values [["a" "c" "a"] ["a" "c" "b"]]}}))
+          tree (btree/new! store "root" 3)]
+      (btree/delete! tree ["a" "b" "e"])
+      ;; TODO these keys are almost certainly wrong, fix them when
+      ;; deletion is implemented
+      (t/is (= {"root" {:values ["5" ["a" "b" "d"] "6"]}
+                "1" {:values [["a" "b" "a"]] :neighbor "2"}
+                "2" {:values [["a" "b" "c"]] :neighbor "3"}
+                "3" {:values [["a" "b" "d"]] :neighbor "7"}
+                "5" {:values ["1" ["a" "b" "c"] "2"] :neighbor "6"}
+                "6" {:values ["3" ["a" "b" "e"] "4" ["a" "c"] "7"]}
+                "7" {:values [["a" "c" "a"]] :neighbor "8"}
+                "8" {:values [["a" "c" "b"]]}}
+               @(:state (:store tree)))))))
