@@ -1,5 +1,7 @@
 (ns unifydb.storage.btree
-  "An implementation of a b-tree built on top of a KV store"
+  "An implementation of a b-tree built on top of a KV store.
+  WRITING IS NOT THREAD SAFE, only write in the single-threaded
+  transactor."
   (:require [unifydb.storage :as store])
   (:import [java.util UUID]))
 
@@ -74,29 +76,7 @@
                   (neg? (compare-search-keys prefix val)) (recur node prefix left middle)))))]
     (binary-search node prefix 0 (node-count node))))
 
-(defn upper-bound
-  "Returns the upper bound of the region in `node` prefixed with
-  `prefix`. Returns `nil` if no values in `node` have the
-  `previx`. Note that the return value is actually the index of the
-  last prefixed value + 1, so that (subvec node lower-bound
-  upper-bound) returns the prefixed section."
-  [node prefix]
-  (letfn [(search [node prefix left right]
-            (if (>= left right)
-              left
-              (let [middle (+ left (quot (- right left) 2))
-                    middle (if (pointer? (node-get node middle))
-                             (inc middle)
-                             middle)
-                    val (node-get node middle)]
-                (cond
-                  (>= middle right) middle
-                  (neg? (compare-search-keys prefix val)) (recur node prefix left middle)
-                  (zero? (compare-search-keys prefix val)) (recur node prefix (+ middle 1) right)
-                  (pos? (compare-search-keys prefix val)) (recur node prefix
-                                                                 (+ middle 1)
-                                                                 right)))))]
-    (search node prefix 0 (node-count node))))
+(defn lower-bound-exact
 
 (defn find-leaf-for
   "Returns a vector whose first element is the smallest leaf node that

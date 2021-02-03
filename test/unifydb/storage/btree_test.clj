@@ -108,7 +108,6 @@
       (t/testing (format "Insert - insertions: %s, order: %s" insertions order)
         (t/is (= expected-state @(:state (:store tree))))))))
 
-;; TODO this is broken, it's searching a b-tree not a b+ tree
 (t/deftest test-search
   (t/testing "Searching"
     (let [store (memstore/->InMemoryKeyValueStore
