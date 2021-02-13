@@ -191,3 +191,33 @@
                 "7" {:values [["a" "c" "a"]] :neighbor "8"}
                 "8" {:values [["a" "c" "b"]]}}
                @(:state (:store tree)))))))
+
+(t/deftest test-find-siblings
+  (t/testing "Find siblings"
+    (let [store (memstore/->InMemoryKeyValueStore
+                 (atom {"root" {:values ["13" ["a" "c"] "14"]}
+                        "1" {:values [["a" "a" "b"] ["a" "b" "a"]] :neighbor "2"}
+                        "2" {:values [["a" "b" "c"]] :neighbor "3"}
+                        "3" {:values [["a" "b" "d"]] :neighbor "4"}
+                        "4" {:values [["a" "b" "e"]] :neighbor "7"}
+                        "5" {:values ["1" ["a" "b" "c"] "2"] :neighbor "6"}
+                        "6" {:values ["3" ["a" "b" "e"] "4"]}
+                        "7" {:values [["a" "c" "a"]] :neighbor "8"}
+                        "8" {:values [["a" "c" "b"]] :neighbor "10"}
+                        "9" {:values ["7" ["a" "c" "b"] "8"]}
+                        "10" {:values [["a" "c" "c"]] :neighbor "11"}
+                        "11" {:values [["a" "d" "a"] ["a" "d" "b"]] :neighbor "15"}
+                        "12" {:values ["10" ["a" "d"] "11"]}
+                        "13" {:values ["5" ["a" "b" "d"] "6"] :neighbor "14"}
+                        "14" {:values ["9" ["a" "c" "c"] "12" ["b"] "17"]}
+                        "15" {:values [["b" "a" "a"] ["b" "d" "a"]] :neighbor "16"}
+                        "16" {:values [["c" "a" "b"]] :neighbor "18"}
+                        "17" {:values ["15" ["c"] "16" ["c" "b"] "18"]}
+                        "18" {:values [["c" "b" "a"] ["d" "a" "c"]]}}))
+          btree (btree/new! store "root" 3)]
+      (t/is (= "11" (btree/next-sibling btree ["root" "14" "12" "10"] (store/get store "10"))))
+      (t/is (= nil (btree/prev-sibling btree ["root" "14" "12" "10"] (store/get store "10"))))
+      (t/is (= "17" (btree/next-sibling btree ["root" "14" "12"] (store/get store "12"))))
+      (t/is (= nil (btree/next-sibling btree ["root" "13" "6"] (store/get store "6"))))
+      (t/is (= "9" (btree/prev-sibling btree ["root" "14" "12"] (store/get store "12"))))
+      (t/is (= nil (btree/prev-sibling btree ["root" "14" "9"] (store/get store "9")))))))
