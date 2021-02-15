@@ -179,13 +179,13 @@
                         "7" {:values [["a" "c" "a"] ["a" "c" "b"]]}}))
           tree (btree/new! store "root" 3)]
       (btree/delete! tree ["a" "b" "e"])
-      (t/is (= {"root" {:values ["5" ["a" "b" "d"] "6"]},
-                "1" {:values [["a" "b" "a"]], :neighbor "2"},
-                "2" {:values [["a" "b" "c"]], :neighbor "3"},
-                "3" {:values [["a" "b" "d"]], :neighbor "4"},
-                "5" {:values ["1" ["a" "b" "c"] "2"]},
-                "6" {:values ["3" ["a" "b" "e"] "4" ["a" "c" "b"] "7"]},
-                "4" {:values [["a" "c" "a"]], :neighbor "7"},
+      (t/is (= {"root" {:values ["5" ["a" "b" "d"] "6"]}
+                "1" {:values [["a" "b" "a"]] :neighbor "2"}
+                "2" {:values [["a" "b" "c"]] :neighbor "3"}
+                "3" {:values [["a" "b" "d"]] :neighbor "4"}
+                "5" {:values ["1" ["a" "b" "c"] "2"]}
+                "6" {:values ["3" ["a" "b" "e"] "4" ["a" "c" "b"] "7"]}
+                "4" {:values [["a" "c" "a"]] :neighbor "7"}
                 "7" {:values [["a" "c" "b"]]}}
                @(:state (:store tree)))))))
 
