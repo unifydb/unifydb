@@ -296,7 +296,6 @@
                       next-node (and next-key
                                      (<= (node-count prev-node) min)
                                      (store/get (:store tree) next-key))]
-                  ;; TODO these first 2 cond branches have tons of duplicate logic, combine them
                   (cond
                     ;; Pull value from previous sibling
                     (and prev-node
