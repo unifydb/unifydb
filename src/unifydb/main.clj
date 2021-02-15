@@ -1,5 +1,6 @@
 (ns unifydb.main
   (:require [unifydb.cli.unifydb :as unifydb]
+            [unifydb.id]
             [unifydb.structlog :as structlog]))
 
 (defn -main [& args]

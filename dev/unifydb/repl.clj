@@ -23,6 +23,7 @@
             [clojure.test :refer [run-tests]]
             [cognitect.test-runner :as test-runner]
             [unifydb.cache.memory :as memcache]
+            [unifydb.id]
             [unifydb.messagequeue :as queue :refer [publish subscribe]]
             [unifydb.messagequeue.memory :as memq]
             [unifydb.query :as query]
