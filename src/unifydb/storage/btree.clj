@@ -22,6 +22,10 @@
   [node index]
   (get (node-values node) index))
 
+(defn node-set
+  [node index val]
+  (update node :values #(assoc % index val)))
+
 (defn node-range
   [node start end]
   (subvec (node-values node) start end))
@@ -227,7 +231,8 @@
     tree))
 
 (defn next-sibling
-  "Returns the next-greatest sibling key or `nil` if the sibling does not exit."
+  "Returns [index, next-greatest sibling key] or `nil` if the
+  sibling does not exit."
   [tree path node]
   (if-let [neighbor (:neighbor node)]
     neighbor
@@ -237,10 +242,12 @@
                       (peek (node-values node))
                       (get (node-values node) (- (node-count node) 2)))
           sibling-idx (inc (lower-bound-exact parent upper-val))]
-      (node-get parent sibling-idx))))
+      (when-let [key (node-get parent sibling-idx)]
+        [sibling-idx key]))))
 
 (defn prev-sibling
-  "Returns the next-least sibling key or `nil` if the sibling does not exist"
+  "Returns [index, next-least sibling key] or `nil` if the sibling
+  does not exist"
   [tree path node]
   (let [parent-key (nth path (- (count path) 2))
         parent (store/get (:store tree) parent-key)
@@ -248,7 +255,8 @@
                     (first (node-values node))
                     (second (node-values node)))
         sibling-idx (- (lower-bound-exact parent lower-val) 3)]
-    (node-get parent sibling-idx)))
+    (when-let [key (node-get parent sibling-idx)]
+      [sibling-idx key])))
 
 (defn delete-from
   "Delete `value` from `node`, rebalancing the tree if necessary. Does
@@ -257,10 +265,11 @@
   [tree node value path]
   (letfn [(delete-from-iter [node value path acc]
             (let [node-key (peek path)
+                  parent-key (nth path (- count path) 2)
                   idx (lower-bound-exact node value)]
               (if (not= (node-get node idx) value)
                 acc
-                (let [new-node (node-delete node idx)
+                (let [new-node (node-delete node idx (inc idx))
                       min (cond
                             (= node-key (:root-key tree)) 0
                             (leaf? node) (quot (:order tree) 2)
@@ -283,8 +292,8 @@
                     ;;     - If the parent is the root and it only has
                     ;;       1 key, simply delete the root node and
                     ;;       make the newly merged node the new root
-                    (let [prev-key (prev-sibling tree path node)
-                          next-key (next-sibling tree path node)
+                    (let [[prev-idx prev-key] (prev-sibling tree path node)
+                          [next-idx next-key] (next-sibling tree path node)
                           prev-node (and prev-key (store/get (:store tree) prev-key))
                           next-node (and next-key
                                          (<= (node-count prev-node) min)
@@ -294,32 +303,41 @@
                         ;; Pull value from previous sibling
                         (and prev-node
                              (> (node-count prev-node)
-                                min)) (let [start (if (leaf? prev-node)
-                                                    (dec (node-count prev-node))
-                                                    (- (node-count prev-node) 2))
-                                            end (node-count prev-node)
-                                            vals (node-range prev-node start end)
-                                            new-node (node-insert new-node 0 vals)
-                                            new-prev (node-delete prev-node start end)]
-                                        ;; TODO update separator in parent
-                                        (assoc acc
-                                               node-key new-node
-                                               prev-key new-prev))
+                                min))
+                        (let [start (if (leaf? prev-node)
+                                      (dec (node-count prev-node))
+                                      (- (node-count prev-node) 2))
+                              end (node-count prev-node)
+                              vals (node-range prev-node start end)
+                              new-node (node-insert new-node 0 vals)
+                              new-prev (node-delete prev-node start end)
+                              new-sep (separator-for tree new-prev new-node)
+                              parent (store/get (:store tree) parent-key)
+                              new-parent (node-set parent (inc prev-idx) new-sep)]
+                          (assoc acc
+                                 node-key new-node
+                                 prev-key new-prev
+                                 parent-key new-parent))
                         ;; Pull value from next sibling
                         (and next-node
                              (> (node-count next-node)
-                                min)) (let [start (if (leaf? next-node) 0 1)
-                                            end (if (leaf? next-node) 1 3)
-                                            vals (node-range next-node start end)
-                                            new-node (node-insert new-node (node-count new-node) vals)
-                                            new-next (node-delete next-node start end)]
-                                        ;; TODO update separator in parent
-                                        (assoc acc
-                                               node-key new-node
-                                               next-key new-next))
+                                min))
+                        (let [start (if (leaf? next-node) 0 1)
+                              end (if (leaf? next-node) 1 3)
+                              vals (node-range next-node start end)
+                              new-node (node-insert new-node
+                                                    (node-count new-node)
+                                                    vals)
+                              new-next (node-delete next-node start end)
+                              new-sep (separator-for tree new-node new-next)
+                              parent (store/get (:store tree) parent-key)
+                              new-parent (node-set parent (dec next-idx) new-sep)]
+                          (assoc acc
+                                 node-key new-node
+                                 next-key new-next
+                                 parent-key new-parent))
                         ;; Merge node with sibling
-                        :else (let [parent-key (nth path (- (count path) 2))
-                                    parent-is-root? (= (count path) 2)]
+                        :else (let [parent-is-root? (= (count path) 2)]
                                 ;; TODO
                                 )))
                     (assoc acc node-key new-node))))))]
