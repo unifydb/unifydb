@@ -61,8 +61,7 @@
                              "1" {:values [["a" "b" "a"]] :neighbor "2"}
                              "2" {:values [["a" "b" "c"]] :neighbor "3"}
                              "3" {:values [["a" "b" "d"]] :neighbor "4"}
-                             ;; TODO this branch node shouldn't have a :neighbor
-                             "5" {:values ["1" ["a" "b" "c"] "2"] :neighbor "6"}
+                             "5" {:values ["1" ["a" "b" "c"] "2"]}
                              "6" {:values ["3" ["a" "b" "e"] "4" ["a" "c"] "7"]}
                              "4" {:values [["a" "b" "e"]] :neighbor "7"}
                              "7" {:values [["a" "c" "a"] ["a" "c" "b"]]}}}
@@ -86,7 +85,7 @@
                              "2" {:values [["a" "b" "c"]] :neighbor "3"}
                              "3" {:values [["a" "b" "d"]] :neighbor "4"}
                              "4" {:values [["a" "b" "e"]] :neighbor "7"}
-                             "5" {:values ["1" ["a" "b" "c"] "2"] :neighbor "6"}
+                             "5" {:values ["1" ["a" "b" "c"] "2"]}
                              "6" {:values ["3" ["a" "b" "e"] "4"]}
                              "7" {:values [["a" "c" "a"]] :neighbor "8"}
                              "8" {:values [["a" "c" "b"]] :neighbor "10"}
@@ -94,7 +93,7 @@
                              "10" {:values [["a" "c" "c"]] :neighbor "11"}
                              "11" {:values [["a" "d" "a"] ["a" "d" "b"]] :neighbor "15"}
                              "12" {:values ["10" ["a" "d"] "11"]}
-                             "13" {:values ["5" ["a" "b" "d"] "6"] :neighbor "14"}
+                             "13" {:values ["5" ["a" "b" "d"] "6"]}
                              "14" {:values ["9" ["a" "c" "c"] "12" ["b"] "17"]}
                              "15" {:values [["b" "a" "a"] ["b" "d" "a"]] :neighbor "16"}
                              "16" {:values [["c" "a" "b"]] :neighbor "18"}
@@ -117,7 +116,7 @@
                         "2" {:values [["a" "b" "c"]] :neighbor "3"}
                         "3" {:values [["a" "b" "d"]] :neighbor "4"}
                         "4" {:values [["a" "b" "e"]] :neighbor "7"}
-                        "5" {:values ["1" ["a" "b" "c"] "2"] :neighbor "6"}
+                        "5" {:values ["1" ["a" "b" "c"] "2"]}
                         "6" {:values ["3" ["a" "b" "e"] "4"]}
                         "7" {:values [["a" "c" "a"]] :neighbor "8"}
                         "8" {:values [["a" "c" "b"]] :neighbor "10"}
@@ -154,7 +153,7 @@
                         "1" {:values [["a" "b" "a"]] :neighbor "2"}
                         "2" {:values [["a" "b" "c"]] :neighbor "3"}
                         "3" {:values [["a" "b" "d"]] :neighbor "4"}
-                        "5" {:values ["1" ["a" "b" "c"] "2"] :neighbor "6"}
+                        "5" {:values ["1" ["a" "b" "c"] "2"]}
                         "6" {:values ["3" ["a" "b" "e"] "4" ["a" "c"] "7"]}
                         "4" {:values [["a" "b" "e"]] :neighbor "7"}
                         "7" {:values [["a" "c" "a"] ["a" "c" "b"]]}}))
@@ -164,7 +163,7 @@
                 "1" {:values [["a" "b" "a"]] :neighbor "2"}
                 "2" {:values [["a" "b" "c"]] :neighbor "3"}
                 "3" {:values [["a" "b" "d"]] :neighbor "4"}
-                "5" {:values ["1" ["a" "b" "c"] "2"] :neighbor "6"}
+                "5" {:values ["1" ["a" "b" "c"] "2"]}
                 "6" {:values ["3" ["a" "b" "e"] "4" ["a" "c"] "7"]}
                 "4" {:values [["a" "b" "e"]] :neighbor "7"}
                 "7" {:values [["a" "c" "a"]]}}
@@ -174,7 +173,7 @@
                         "1" {:values [["a" "b" "a"]] :neighbor "2"}
                         "2" {:values [["a" "b" "c"]] :neighbor "3"}
                         "3" {:values [["a" "b" "d"]] :neighbor "4"}
-                        "5" {:values ["1" ["a" "b" "c"] "2"] :neighbor "6"}
+                        "5" {:values ["1" ["a" "b" "c"] "2"]}
                         "6" {:values ["3" ["a" "b" "e"] "4" ["a" "c"] "7"]}
                         "4" {:values [["a" "b" "e"]] :neighbor "7"}
                         "7" {:values [["a" "c" "a"] ["a" "c" "b"]]}}))
@@ -184,7 +183,7 @@
                 "1" {:values [["a" "b" "a"]], :neighbor "2"},
                 "2" {:values [["a" "b" "c"]], :neighbor "3"},
                 "3" {:values [["a" "b" "d"]], :neighbor "4"},
-                "5" {:values ["1" ["a" "b" "c"] "2"], :neighbor "6"},
+                "5" {:values ["1" ["a" "b" "c"] "2"]},
                 "6" {:values ["3" ["a" "b" "e"] "4" ["a" "c" "b"] "7"]},
                 "4" {:values [["a" "c" "a"]], :neighbor "7"},
                 "7" {:values [["a" "c" "b"]]}}
@@ -198,7 +197,7 @@
                         "2" {:values [["a" "b" "c"]] :neighbor "3"}
                         "3" {:values [["a" "b" "d"]] :neighbor "4"}
                         "4" {:values [["a" "b" "e"]] :neighbor "7"}
-                        "5" {:values ["1" ["a" "b" "c"] "2"] :neighbor "6"}
+                        "5" {:values ["1" ["a" "b" "c"] "2"]}
                         "6" {:values ["3" ["a" "b" "e"] "4"]}
                         "7" {:values [["a" "c" "a"]] :neighbor "8"}
                         "8" {:values [["a" "c" "b"]] :neighbor "10"}

@@ -209,7 +209,9 @@
                   (if (empty? parent-path-from-root)
                     (let [new-upper-key ((:id-generator tree))
                           new-root [new-key separator new-upper-key]
-                          lower-node (assoc lower-node :neighbor new-upper-key)]
+                          lower-node (if (leaf? lower-node)
+                                       (assoc lower-node :neighbor new-upper-key)
+                                       lower-node)]
                       (assoc acc
                              (:root-key tree) {:values new-root}
                              new-key lower-node
