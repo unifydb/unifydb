@@ -8,6 +8,8 @@
     (get @(:state store) key))
   (assoc! [store key val]
     (swap! (:state store) assoc key val))
+  (dissoc! [store key]
+    (swap! (:state store) dissoc key))
   (contains? [store key]
     (map-contains? @(:state store) key)))
 

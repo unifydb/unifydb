@@ -180,16 +180,14 @@
                         "7" {:values [["a" "c" "a"] ["a" "c" "b"]]}}))
           tree (btree/new! store "root" 3)]
       (btree/delete! tree ["a" "b" "e"])
-      ;; TODO these keys are almost certainly wrong, fix them when
-      ;; deletion is implemented
-      (t/is (= {"root" {:values ["5" ["a" "b" "d"] "6"]}
-                "1" {:values [["a" "b" "a"]] :neighbor "2"}
-                "2" {:values [["a" "b" "c"]] :neighbor "3"}
-                "3" {:values [["a" "b" "d"]] :neighbor "7"}
-                "5" {:values ["1" ["a" "b" "c"] "2"] :neighbor "6"}
-                "6" {:values ["3" ["a" "b" "e"] "4" ["a" "c"] "7"]}
-                "7" {:values [["a" "c" "a"]] :neighbor "8"}
-                "8" {:values [["a" "c" "b"]]}}
+      (t/is (= {"root" {:values ["5" ["a" "b" "d"] "6"]},
+                "1" {:values [["a" "b" "a"]], :neighbor "2"},
+                "2" {:values [["a" "b" "c"]], :neighbor "3"},
+                "3" {:values [["a" "b" "d"]], :neighbor "4"},
+                "5" {:values ["1" ["a" "b" "c"] "2"], :neighbor "6"},
+                "6" {:values ["3" ["a" "b" "e"] "4" ["a" "c" "b"] "7"]},
+                "4" {:values [["a" "c" "a"]], :neighbor "7"},
+                "7" {:values [["a" "c" "b"]]}}
                @(:state (:store tree)))))))
 
 (t/deftest test-find-siblings
@@ -215,9 +213,9 @@
                         "17" {:values ["15" ["c"] "16" ["c" "b"] "18"]}
                         "18" {:values [["c" "b" "a"] ["d" "a" "c"]]}}))
           btree (btree/new! store "root" 3)]
-      (t/is (= "11" (btree/next-sibling btree ["root" "14" "12" "10"] (store/get store "10"))))
+      (t/is (= [2 "11"] (btree/next-sibling btree ["root" "14" "12" "10"] (store/get store "10"))))
       (t/is (= nil (btree/prev-sibling btree ["root" "14" "12" "10"] (store/get store "10"))))
-      (t/is (= "17" (btree/next-sibling btree ["root" "14" "12"] (store/get store "12"))))
+      (t/is (= [4 "17"] (btree/next-sibling btree ["root" "14" "12"] (store/get store "12"))))
       (t/is (= nil (btree/next-sibling btree ["root" "13" "6"] (store/get store "6"))))
-      (t/is (= "9" (btree/prev-sibling btree ["root" "14" "12"] (store/get store "12"))))
+      (t/is (= [0 "9"] (btree/prev-sibling btree ["root" "14" "12"] (store/get store "12"))))
       (t/is (= nil (btree/prev-sibling btree ["root" "14" "9"] (store/get store "9")))))))
