@@ -273,22 +273,6 @@
                         :else (+ (quot (:order tree) 2)
                                  (- (quot (:order tree) 2) 1)))]
               (if (< (node-count new-node) min)
-                ;; - Rebalance:
-                ;;   - First check the sibling nodes (via
-                ;;     neighbor pointer for leaf older and through
-                ;;     parent for leaf younger or branch either)
-                ;;   - If either sibling has > min values, pull
-                ;;     the least/greatest value from that node
-                ;;     into this one and update the parent
-                ;;     separator key
-                ;;   - Otherwise:
-                ;;     - If the parent is not a root with 1 item,
-                ;;       merge the node with its sibling that has
-                ;;       = min values and recurse upwards to
-                ;;       delete the separator key from the parent
-                ;;     - If the parent is the root and it only has
-                ;;       1 key, simply delete the root node and
-                ;;       make the newly merged node the new root
                 (let [[prev-idx prev-key] (prev-sibling tree path node)
                       [next-idx next-key] (next-sibling tree path node)
                       parent (store/get (:store tree) parent-key)
@@ -379,9 +363,6 @@
 (defn delete!
   "Deletes `value` from `tree`, rebalancing the tree if necessary."
   [tree value]
-  ;; Find leaf that value should be in
-  ;; If value is in leaf, remove it from leaf
-  ;; If node is now "too small" (???), merge it with its neighbor. How does this work???
   (let [root (store/get (:store tree) (:root-key tree))
         [leaf path] (find-leaf-for (:store tree) root value [(:root-key tree)])
         modifications (delete-from tree leaf value path)]
