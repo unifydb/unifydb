@@ -2,7 +2,7 @@
   "An implementation of a b-tree built on top of a KV store.
   WRITING IS NOT THREAD SAFE, only write in the single-threaded
   transactor."
-  (:require [unifydb.storage :as store])
+  (:require [unifydb.kvstore :as store])
   (:import [java.util UUID]))
 
 (defn pointer?

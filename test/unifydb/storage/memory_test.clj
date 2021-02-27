@@ -1,6 +1,6 @@
 (ns unifydb.storage.memory-test
   (:require [clojure.test :refer [deftest is testing]]
-            [unifydb.storage.memory :as mem]
+            [unifydb.kvstore.memory :as mem]
             [unifydb.storage :as store]))
 
 (deftest test-transact-facts

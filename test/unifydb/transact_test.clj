@@ -5,7 +5,7 @@
                                    fact-attribute]]
             [unifydb.messagequeue.memory :as memq]
             [unifydb.service :as service]
-            [unifydb.storage.memory :as memstore]
+            [unifydb.kvstore.memory :as memstore]
             [unifydb.transact :as t]))
 
 (deftest transact-test

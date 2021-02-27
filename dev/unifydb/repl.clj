@@ -29,7 +29,7 @@
             [unifydb.query :as query]
             [unifydb.server :as server]
             [unifydb.service :as service]
-            [unifydb.storage.memory :as memstore]
+            [unifydb.kvstore.memory :as memstore]
             [unifydb.structlog :as structlog]
             [unifydb.transact :as transact :refer [transact]]
             [unifydb.util :refer [query]]))

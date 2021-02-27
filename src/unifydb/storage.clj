@@ -1,39 +1,25 @@
 (ns unifydb.storage
-  "Key-value store protocol. Implementations must support string keys
-  and arbitrary EDN values."
-  (:refer-clojure :exclude [get assoc! dissoc! contains?]))
+  (:require [unifydb.kvstore :as kvstore]
+            [unifydb.storage.btree :as btree]))
 
-(defprotocol IKeyValueStore
-  (store-get [store key] "Retrieves the value associated with `key` in `store`.")
-  (assoc! [store key val] "Associates `key` with `val` in `store`.")
-  (dissoc! [store key] "Deletes `key` from `store`.")
-  (contains? [store key] "Whether the `store` contains the `key`."))
+(defn insert-facts!
+  [])
 
-(defn get
-  "Retrieves the value associated with `key` in `store`."
-  [store key]
-  (store-get store key))
+(defn get-next-id!
+  "Returns the next available sequential ID. Not thread-safe, only
+  call this in the transactor."
+  [storage]
+  (let [next-id (or (kvstore/get (:kvstore storage) "id-counter")
+                    0)]
+    (kvstore/assoc! (:kvstore storage) "id-counter" (inc next-id))
+    next-id))
 
-;; The store is flat KV store mapping "fact keys" to facts, alongside
-;; the EAVT and AVET indices.
-
-;; Indices are implemented as b-trees on top of the KV store.
-
-;; Each index has a top-level key that points to the b-tree root node
-;; (:eavt, :avet)
-
-;; Each b-tree node has an arbitrary key. The value is the state of
-;; that node - the collection of keys and pointers to the child nodes
-;; (the keys of those child nodes).
-
-;; To find all facts that match an index prefix (e.g. all facts about
-;; some entity, the prefix of the EAVT index):
-;; - start traversal at the root node of that index
-;; - in the current node: add all keys that match the prefix to the result list
-;; - in the current node: child pointers that are directly after a key
-;;   that matches the prefix may also contain keys that match the
-;;   prefix. Traverse into all such children
-;; - continue traversal until there are no more child nodes to traverse into
-;; - return the list of matching keys that has been collected during traversal
-
-;; OR what if the "key" for a fact is the fact itself? E.g. for EAVT the key would be [entity attribute value tx-id]. Then there would be no need to store the facts outside the indices. The downside is that each index would store duplicates of the facts, but that may be unavoidable anyways since it's not clear that I could make keys ordered by EAVT/AVET without including the entire fact in that key anyways.
+(defn new!
+  "Returns a new storage backend, creating the indices in the
+  `kvstore` if they don't exist."
+  [kvstore]
+  {:kvstore kvstore
+   :indices {:eavt (btree/new! kvstore "eavt" 500)
+             ;; TODO also have AEVT?
+             :avet (btree/new! kvstore "avet" 500)
+             :vaet (btree/new! kvstore "vaet" 500)}})

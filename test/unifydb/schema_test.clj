@@ -3,7 +3,7 @@
             [unifydb.messagequeue.memory :as memq]
             [unifydb.query :as query]
             [unifydb.schema :as schema]
-            [unifydb.storage.memory :as memstore]
+            [unifydb.kvstore.memory :as memstore]
             [unifydb.service :as service]
             [unifydb.transact :as transact]))
 

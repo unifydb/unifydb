@@ -4,7 +4,7 @@
             [unifydb.query :as query]
             [unifydb.service :as service]
             [unifydb.storage :as store]
-            [unifydb.storage.memory :as memstore]
+            [unifydb.kvstore.memory :as memstore]
             [unifydb.util :as util]))
 
 (deftest simple-matching

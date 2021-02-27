@@ -1,5 +1,5 @@
-(ns unifydb.storage.memory
-  (:require [unifydb.storage :as storage])
+(ns unifydb.kvstore.memory
+  (:require [unifydb.kvstore :as storage])
   (:refer-clojure :rename {contains? map-contains?}))
 
 (defrecord InMemoryKeyValueStore [state]

@@ -16,7 +16,7 @@
             [unifydb.query :as query]
             [unifydb.server :as server]
             [unifydb.service :as service]
-            [unifydb.storage.memory :as memstore]
+            [unifydb.kvstore.memory :as memstore]
             [unifydb.transact :as transact]
             [unifydb.auth :as auth]
             [unifydb.cache.memory :as memcache]))
