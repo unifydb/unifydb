@@ -64,7 +64,9 @@
       (compare-search-keys [\"c\" \"a\" \"b\"] [\"b\" \"c\"])       ;; => 1"
 
   [first second]
-  (let [min-length (min (count first) (count second))
+  (let [first (if (:key first) (:key first) first)
+        second (if (:key second) (:key second) second)
+        min-length (min (count first) (count second))
         first-trunc (subvec first 0 min-length)
         second-trunc (subvec second 0 min-length)
         zero-val (if (>= (count first) (count second)) 1 -1)
@@ -98,9 +100,12 @@
   "Like `lower-bound`, but allows for an exact match of `value`
   instead of treating it as a search key."
   [node value]
-  (let [bound (lower-bound node value)]
-    (if (= (node-get node (max 0 (dec bound))) value)
-      (max 0 (dec bound))
+  (let [bound (lower-bound node value)
+        idx (max 0 (dec bound))
+        test-val (node-get node idx)
+        test-val (if (:key test-val) (:key test-val) test-val)]
+    (if (= test-val value)
+      idx
       bound)))
 
 (defn find-leaf-for
@@ -127,7 +132,8 @@
 
 (defn prefixed-by?
   [value prefix]
-  (= (subvec value 0 (count prefix)) prefix))
+  (let [value (if (:key value) (:key value) value)]
+    (= (subvec value 0 (count prefix)) prefix)))
 
 (defn search
   "Searchs `tree`, returning all keys that start with `prefix`."
@@ -169,7 +175,9 @@
                 (conj acc (first b)))
               (recur (rest a) (rest b) (conj acc (first b)))))]
     (let [a (greatest-value lower)
-          b (least-value upper)]
+          b (least-value upper)
+          a (if (:key a) (:key a) a)
+          b (if (:key b) (:key b) b)]
       (find-common-prefix a b []))))
 
 (defn insert-into
@@ -184,9 +192,7 @@
                   search-key (first value)
                   target-idx (lower-bound node search-key)
                   [lower upper] (map vec (split-at target-idx (node-values node)))
-                  node (if (= (node-get node target-idx) value)
-                         node
-                         (assoc node :values (vec (concat lower value upper))))]
+                  node (assoc node :values (vec (concat lower value upper)))]
               (if (or (and (leaf? node)
                            (> (node-count node) (- (:order tree) 1)))
                       (> (node-count node) (- (* 2 (:order tree)) 1)))
@@ -223,11 +229,12 @@
     (insert-into-iter node value path-from-root {})))
 
 (defn insert!
-  "Inserts `key` into `tree`, rebalancing the tree if necessary."
-  [tree value]
+  "Inserts `value` into `tree` sorted by `key`, rebalancing the tree if necessary."
+  [tree key value]
   (let [root (store/get (:store tree) (:root-key tree))
-        [leaf path] (find-leaf-for (:store tree) root value [(:root-key tree)])
-        modifications (insert-into tree leaf [value] path)]
+        val {:key key :value value}
+        [leaf path] (find-leaf-for (:store tree) root val [(:root-key tree)])
+        modifications (insert-into tree leaf [val] path)]
     (doseq [[key node] modifications]
       (store/assoc! (:store tree) key node))
     tree))
@@ -262,7 +269,7 @@
   "Delete `value` from `node`, rebalancing the tree if necessary. Does
   not actually mutate `tree`, but returns a map of node keys to new
   node values."
-  [tree node value path]
+  [tree node key path]
   (letfn [(delete-from-iter [node start end path acc]
             (let [node-key (peek path)
                   parent-key (nth path (- (count path) 2))
@@ -355,17 +362,19 @@
                                             node-key :delete
                                             sib-key merged))))))
                 (assoc acc node-key new-node))))]
-    (let [idx (lower-bound-exact node value)]
-      (if (not= (node-get node idx) value)
+    (let [idx (lower-bound-exact node key)
+          test-val (node-get node idx)
+          test-val (if (:key test-val) (:key test-val) test-val)]
+      (if (not= test-val key)
         {}
         (delete-from-iter node idx (inc idx) path {})))))
 
 (defn delete!
-  "Deletes `value` from `tree`, rebalancing the tree if necessary."
-  [tree value]
+  "Deletes the value with `key` from `tree`, rebalancing the tree if necessary."
+  [tree key]
   (let [root (store/get (:store tree) (:root-key tree))
-        [leaf path] (find-leaf-for (:store tree) root value [(:root-key tree)])
-        modifications (delete-from tree leaf value path)]
+        [leaf path] (find-leaf-for (:store tree) root key [(:root-key tree)])
+        modifications (delete-from tree leaf key path)]
     (doseq [[key node] modifications]
       (if (= node :delete)
         (store/dissoc! (:store tree) key)
