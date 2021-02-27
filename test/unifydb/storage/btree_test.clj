@@ -1,8 +1,10 @@
 (ns unifydb.storage.btree-test
-  (:require [clojure.test :as t]
-            [unifydb.storage :as store]
-            [unifydb.storage.btree :as btree]
-            [unifydb.storage.memory :as memstore]))
+  (:require [clojure.pprint :as pprint]
+            [clojure.repl :as repl]
+            [clojure.test :as t]
+            [unifydb.kvstore :as store]
+            [unifydb.kvstore.memory :as memstore]
+            [unifydb.storage.btree :as btree]))
 
 (t/deftest test-find-leaf-for
   (let [store (memstore/->InMemoryKeyValueStore
@@ -105,7 +107,10 @@
           tree (btree/new! store "root" order id-generator)]
       (doseq [value insertions]
         (btree/insert! tree value))
-      (t/testing (format "Insert - insertions: %s, order: %s" insertions order)
+      (t/testing (format "Insert:\n  insertions:\n%s  order: %s"
+                         (with-out-str
+                           (pprint/pprint insertions))
+                         order)
         (t/is (= expected-state @(:state (:store tree))))))))
 
 (t/deftest test-search
