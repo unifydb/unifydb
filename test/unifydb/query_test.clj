@@ -19,7 +19,7 @@
                [2 :address [:cambridge [:mass :ave] 78] 2 true]
                [2 :address [:cambridge [:mass :ave] 78] 3 false]
                [3 :address [:slumerville [:davis :square] 42] 4 true]]
-        storage-backend (store/transact-facts! (memstore/new) facts)
+        storage-backend (store/store-facts! (store/new! (memstore/new)) facts)
         queue-backend (memqueue/new)
         query-service (query/new queue-backend storage-backend)
         db-latest {:tx-id 4}
@@ -70,7 +70,7 @@
                [2 :address [:cambridge [:mass :ave] 78] 2 true]
                [2 :address [:cambridge [:mass :ave] 78] 3 false]
                [3 :address [:slumerville [:davis :square] 42] 4 true]]
-        storage-backend (store/transact-facts! (memstore/new) facts)
+        storage-backend (store/store-facts! (store/new! (memstore/new)) facts)
         queue-backend (memqueue/new)
         query-service (query/new queue-backend storage-backend)
         db {:tx-id 4}]
@@ -118,7 +118,7 @@
                [2 :address [:cambridge [:mass :ave] 78] 2 true]
                [2 :address [:cambridge [:mass :ave] 78] 3 false]
                [3 :address [:slumerville [:davis :square] 42] 4 true]]
-        storage-backend (store/transact-facts! (memstore/new) facts)
+        storage-backend (store/store-facts! (store/new! (memstore/new)) facts)
         queue-backend (memqueue/new)
         query-service (query/new queue-backend storage-backend)
         db {:tx-id 4}]
@@ -154,7 +154,7 @@
                [4 :lucky-number 7 3 true]
                [4 :lucky-number 9 4 true]
                [4 :lucky-number 9 5 false]]
-        storage-backend (store/transact-facts! (memstore/new) facts)
+        storage-backend (store/store-facts! (store/new! (memstore/new)) facts)
         queue-backend (memqueue/new)
         query-service (query/new queue-backend storage-backend)]
     (try
@@ -182,7 +182,7 @@
                [2 :address [:cambridge [:mass :ave] 78] 2 true]
                [2 :address [:cambridge [:mass :ave] 78] 3 false]
                [3 :address [:slumerville [:davis :square] 42] 4 true]]
-        storage-backend (store/transact-facts! (memstore/new) facts)
+        storage-backend (store/store-facts! (store/new! (memstore/new)) facts)
         queue-backend (memqueue/new)
         query-service (query/new queue-backend storage-backend)]
     (try
@@ -255,7 +255,7 @@
                [2 :address [:cambridge [:mass :ave] 78] 2 true]
                [2 :address [:cambridge [:mass :ave] 78] 3 false]
                [3 :address [:slumerville [:davis :square] 42] 4 true]]
-        storage-backend (store/transact-facts! (memstore/new) facts)
+        storage-backend (store/store-facts! (store/new! (memstore/new)) facts)
         queue-backend (memqueue/new)
         query-service (query/new queue-backend storage-backend)
         db-latest {:tx-id :latest}]

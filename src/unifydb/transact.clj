@@ -72,7 +72,7 @@
                    {:db-after (assoc {} :tx-id tx-id)
                     :tx-data (vec facts)
                     :tempids ids})]
-    (storage/transact-facts! storage-backend facts)
+    (storage/store-facts! storage-backend facts)
     tx-report))
 
 (defn transact-loop [queue-backend storage-backend state]
