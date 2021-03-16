@@ -3,14 +3,15 @@
             [unifydb.facts :refer [fact-entity
                                    fact-value
                                    fact-attribute]]
+            [unifydb.kvstore.memory :as memstore]
             [unifydb.messagequeue.memory :as memq]
             [unifydb.service :as service]
-            [unifydb.kvstore.memory :as memstore]
+            [unifydb.storage :as storage]
             [unifydb.transact :as t]))
 
 (deftest transact-test
   (let [queue-backend (memq/new)
-        transact-service (t/new queue-backend (memstore/new))]
+        transact-service (t/new queue-backend (storage/new! (memstore/new)))]
     (try
       (service/start! transact-service)
       (let [tx-data [[:unifydb/add "ben" :name "Ben Bitdiddle"]
@@ -42,7 +43,7 @@
 
 (deftest transact-user-test
   (let [queue-backend (memq/new)
-        store (memstore/new)
+        store (storage/new! (memstore/new))
         transact-service (t/new queue-backend store)]
     (try
       (service/start! transact-service)

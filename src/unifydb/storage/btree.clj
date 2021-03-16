@@ -2,7 +2,8 @@
   "An implementation of a b-tree built on top of a KV store.
   WRITING IS NOT THREAD SAFE, only write in the single-threaded
   transactor."
-  (:require [unifydb.kvstore :as store])
+  (:require [unifydb.comparison :as comparison]
+            [unifydb.kvstore :as store])
   (:import [java.util UUID]))
 
 (defn pointer?
@@ -70,7 +71,7 @@
         first-trunc (subvec first 0 min-length)
         second-trunc (subvec second 0 min-length)
         zero-val (if (>= (count first) (count second)) 1 -1)
-        comparison (compare first-trunc second-trunc)]
+        comparison (comparison/cc-cmp first-trunc second-trunc)]
     (if (zero? comparison) zero-val comparison)))
 
 (defn search-key-<

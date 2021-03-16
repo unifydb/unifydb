@@ -8,72 +8,72 @@
             [unifydb.util :as util]))
 
 (deftest simple-matching
-  (let [facts [[1 :name "Ben Bitdiddle" 0 true]
-               [1 :job [:computer :wizard] 0 true]
-               [1 :salary 60000 1 true]
-               [2 :name "Alyssa P. Hacker" 1 true]
-               [2 :job [:computer :programmer] 2 true]
-               [2 :salary 40000 2 true]
-               [2 :supervisor 1 2 true]
-               [1 :address [:slumerville [:ridge :road] 10] 2 true]
-               [2 :address [:cambridge [:mass :ave] 78] 2 true]
-               [2 :address [:cambridge [:mass :ave] 78] 3 false]
-               [3 :address [:slumerville [:davis :square] 42] 4 true]]
+  (let [facts [[#unifydb/id 1 :name "Ben Bitdiddle" #unifydb/id 0 true]
+               [#unifydb/id 1 :job [:computer :wizard] #unifydb/id 0 true]
+               [#unifydb/id 1 :salary 60000 #unifydb/id 1 true]
+               [#unifydb/id 2 :name "Alyssa P. Hacker" #unifydb/id 1 true]
+               [#unifydb/id 2 :job [:computer :programmer] #unifydb/id 2 true]
+               [#unifydb/id 2 :salary 40000 #unifydb/id 2 true]
+               [#unifydb/id 2 :supervisor #unifydb/id 1 #unifydb/id 2 true]
+               [#unifydb/id 1 :address [:slumerville [:ridge :road] 10] #unifydb/id 2 true]
+               [#unifydb/id 2 :address [:cambridge [:mass :ave] 78] #unifydb/id 2 true]
+               [#unifydb/id 2 :address [:cambridge [:mass :ave] 78] #unifydb/id 3 false]
+               [#unifydb/id 3 :address [:slumerville [:davis :square] 42] #unifydb/id 4 true]]
         storage-backend (store/store-facts! (store/new! (memstore/new)) facts)
         queue-backend (memqueue/new)
         query-service (query/new queue-backend storage-backend)
-        db-latest {:tx-id 4}
-        db-tx-2 {:tx-id 2}]
+        db-latest {:tx-id #unifydb/id 4}
+        db-tx-2 {:tx-id #unifydb/id 2}]
     (try
       (service/start! query-service)
       (doseq [{:keys [query db expected]}
               [{:query '{:find [?e]
                          :where [[?e :name "Ben Bitdiddle"]]}
                 :db db-latest
-                :expected '[[1]]}
+                :expected '[[#unifydb/id 1]]}
                {:query '{:find [?e ?what]
                          :where [[?e :job [:computer ?what]]]}
                 :db db-latest
-                :expected '[[2 :programmer]
-                            [1 :wizard]]}
+                :expected '[[#unifydb/id 2 :programmer]
+                            [#unifydb/id 1 :wizard]]}
                {:query '{:find [?town ?road-and-number]
-                         :where [[1 :address [?town & ?road-and-number]]]}
+                         :where [[#unifydb/id 1 :address [?town & ?road-and-number]]]}
                 :db db-latest
                 :expected '[[:slumerville [[:ridge :road] 10]]]}
                {:query '{:find [?town ?road-and-number]
-                         :where [[2 :address [?town & ?road-and-number]]]}
+                         :where [[#unifydb/id 2 :address [?town & ?road-and-number]]]}
                 :db db-tx-2
                 :expected '[[:cambridge [[:mass :ave] 78]]]}
                {:query '{:find [?town ?road-and-number]
-                         :where [[2 :address [?town & ?road-and-number]]]}
+                         :where [[#unifydb/id 2 :address [?town & ?road-and-number]]]}
                 :db db-latest
                 :expected '[]}
                {:query '{:find [?e]
                          :where [[?e :job [:computer _]]]}
                 :db db-latest
-                :expected '[[2] [1]]}]]
+                :expected '[[#unifydb/id 2] [#unifydb/id 1]]}]]
         (testing (str query)
-          (is (= (:results @(util/query queue-backend db query))
-                 expected))))
+          (is (= expected
+                 (:results @(util/query queue-backend db query))))))
       (finally
         (service/stop! query-service)))))
 
 (deftest compound-queries
-  (let [facts [[1 :name "Ben Bitdiddle" 0 true]
-               [1 :job [:computer :wizard] 0 true]
-               [1 :salary 60000 1 true]
-               [2 :name "Alyssa P. Hacker" 1 true]
-               [2 :job [:computer :programmer] 2 true]
-               [2 :salary 40000 2 true]
-               [2 :supervisor 1 2 true]
-               [1 :address [:slumerville [:ridge :road] 10] 2 true]
-               [2 :address [:cambridge [:mass :ave] 78] 2 true]
-               [2 :address [:cambridge [:mass :ave] 78] 3 false]
-               [3 :address [:slumerville [:davis :square] 42] 4 true]]
+  (let [facts [[#unifydb/id 1 :name "Ben Bitdiddle" #unifydb/id 0 true]
+               [#unifydb/id 1 :job [:computer :wizard] #unifydb/id 0 true]
+               [#unifydb/id 1 :salary 60000 #unifydb/id 1 true]
+               [#unifydb/id 2 :name "Alyssa P. Hacker" #unifydb/id 1 true]
+               [#unifydb/id 2 :job [:computer :programmer] #unifydb/id 2 true]
+               [#unifydb/id 2 :salary 40000 #unifydb/id 2 true]
+               [#unifydb/id 2 :supervisor #unifydb/id 1 #unifydb/id 2 true]
+               [#unifydb/id 1 :address [:slumerville [:ridge :road] 10] #unifydb/id 2 true]
+               [#unifydb/id 2 :address [:cambridge [:mass :ave] 78] #unifydb/id 2 true]
+               [#unifydb/id 2 :address [:cambridge [:mass :ave] 78] #unifydb/id 3 false]
+               [#unifydb/id 3 :address [:slumerville [:davis :square] 42] #unifydb/id 4 true]]
         storage-backend (store/store-facts! (store/new! (memstore/new)) facts)
         queue-backend (memqueue/new)
         query-service (query/new queue-backend storage-backend)
-        db {:tx-id 4}]
+        db {:tx-id #unifydb/id 4}]
     (try
       (service/start! query-service)
       (doseq [{:keys [query db expected]}
@@ -82,24 +82,24 @@
                                   [?e :job [:computer ?what]]
                                   [?e :salary 60000]]]}
                 :db db
-                :expected '[[1 :wizard]]}
+                :expected '[[#unifydb/id 1 :wizard]]}
                {:query '{:find [?e ?what]
                          :where [[?e :job [:computer ?what]]
                                  [?e :salary 60000]]}
                 :db db
-                :expected '[[1 :wizard]]}
+                :expected '[[#unifydb/id 1 :wizard]]}
                {:query '{:find [?e]
                          :where [[:or
                                   [?e :job [:computer :wizard]]
                                   [?e :job [:computer :programmer]]]]}
                 :db db
-                :expected '[[1] [2]]}
+                :expected '[[#unifydb/id 1] [#unifydb/id 2]]}
                {:query '{:find [?e ?what]
                          :where [[:and
                                   [?e :job [:computer ?what]]
                                   [:not [?e :salary 60000]]]]}
                 :db db
-                :expected '[[2 :programmer]]}]]
+                :expected '[[#unifydb/id 2 :programmer]]}]]
         (testing (str query)
           (is (= (:results @(util/query queue-backend db query))
                  expected))))
@@ -107,21 +107,21 @@
         (service/stop! query-service)))))
 
 (deftest rules
-  (let [facts [[1 :name "Ben Bitdiddle" 0 true]
-               [1 :job [:computer :wizard] 0 true]
-               [1 :salary 60000 1 true]
-               [2 :name "Alyssa P. Hacker" 1 true]
-               [2 :job [:computer :programmer] 2 true]
-               [2 :salary 40000 2 true]
-               [2 :supervisor 1 2 true]
-               [1 :address [:slumerville [:ridge :road] 10] 2 true]
-               [2 :address [:cambridge [:mass :ave] 78] 2 true]
-               [2 :address [:cambridge [:mass :ave] 78] 3 false]
-               [3 :address [:slumerville [:davis :square] 42] 4 true]]
+  (let [facts [[#unifydb/id 1 :name "Ben Bitdiddle" #unifydb/id 0 true]
+               [#unifydb/id 1 :job [:computer :wizard] #unifydb/id 0 true]
+               [#unifydb/id 1 :salary 60000 #unifydb/id 1 true]
+               [#unifydb/id 2 :name "Alyssa P. Hacker" #unifydb/id 1 true]
+               [#unifydb/id 2 :job [:computer :programmer] #unifydb/id 2 true]
+               [#unifydb/id 2 :salary 40000 #unifydb/id 2 true]
+               [#unifydb/id 2 :supervisor #unifydb/id 1 #unifydb/id 2 true]
+               [#unifydb/id 1 :address [:slumerville [:ridge :road] 10] #unifydb/id 2 true]
+               [#unifydb/id 2 :address [:cambridge [:mass :ave] 78] #unifydb/id 2 true]
+               [#unifydb/id 2 :address [:cambridge [:mass :ave] 78] #unifydb/id 3 false]
+               [#unifydb/id 3 :address [:slumerville [:davis :square] 42] #unifydb/id 4 true]]
         storage-backend (store/store-facts! (store/new! (memstore/new)) facts)
         queue-backend (memqueue/new)
         query-service (query/new queue-backend storage-backend)
-        db {:tx-id 4}]
+        db {:tx-id #unifydb/id 4}]
     (try
       (service/start! query-service)
       (doseq [{:keys [query db expected]}
@@ -133,7 +133,7 @@
                                   [:not (:same ?person1 ?person2)]]
                                  [(:same ?x ?x)]]}
                 :db db
-                :expected '[[3]]}]]
+                :expected '[[#unifydb/id 3]]}]]
         (testing (str query)
           (is (= (:results @(util/query queue-backend db query))
                  expected))))
@@ -141,80 +141,80 @@
         (service/stop! query-service)))))
 
 (deftest cardinality
-  (let [facts [[1 :unifydb/schema :favorite-colors 0 true]
-               [1 :unifydb/cardinality :cardinality/many 0 true]
-               [2 :name "Bob" 0 true]
-               [2 :favorite-colors "red" 0 true]
-               [2 :favorite-colors "green" 0 true]
-               [2 :favorite-colors "blue" 0 true]
-               [2 :favorite-colors "blue" 1 false]
-               [3 :name "Emily" 2 true]
-               [3 :favorite-colors "yellow" 2 true]
-               [4 :name "Joe" 3 true]
-               [4 :lucky-number 7 3 true]
-               [4 :lucky-number 9 4 true]
-               [4 :lucky-number 9 5 false]]
+  (let [facts [[#unifydb/id 1 :unifydb/schema :favorite-colors #unifydb/id 0 true]
+               [#unifydb/id 1 :unifydb/cardinality :cardinality/many #unifydb/id 0 true]
+               [#unifydb/id 2 :name "Bob" #unifydb/id 0 true]
+               [#unifydb/id 2 :favorite-colors "red" #unifydb/id 0 true]
+               [#unifydb/id 2 :favorite-colors "green" #unifydb/id 0 true]
+               [#unifydb/id 2 :favorite-colors "blue" #unifydb/id 0 true]
+               [#unifydb/id 2 :favorite-colors "blue" #unifydb/id 1 false]
+               [#unifydb/id 3 :name "Emily" #unifydb/id 2 true]
+               [#unifydb/id 3 :favorite-colors "yellow" #unifydb/id 2 true]
+               [#unifydb/id 4 :name "Joe" #unifydb/id 3 true]
+               [#unifydb/id 4 :lucky-number 7 #unifydb/id 3 true]
+               [#unifydb/id 4 :lucky-number 9 #unifydb/id 4 true]
+               [#unifydb/id 4 :lucky-number 9 #unifydb/id 5 false]]
         storage-backend (store/store-facts! (store/new! (memstore/new)) facts)
         queue-backend (memqueue/new)
         query-service (query/new queue-backend storage-backend)]
     (try
       (service/start! query-service)
       (testing "Cardinality many"
-        (is (= [[2 "red"]
-                [2 "green"]
-                [3 "yellow"]]
+        (is (= [[#unifydb/id 2 "red"]
+                [#unifydb/id 2 "green"]
+                [#unifydb/id 3 "yellow"]]
                (:results @(util/query queue-backend
-                                      {:tx-id 5}
+                                      {:tx-id #unifydb/id 5}
                                       '{:find [?ent ?color]
                                         :where [[?ent :favorite-colors ?color]]})))))
       (finally
         (service/stop! query-service)))))
 
 (deftest operators
-  (let [facts [[1 :name "Ben Bitdiddle" 0 true]
-               [1 :job [:computer :wizard] 0 true]
-               [1 :salary 60000 1 true]
-               [2 :name "Alyssa P. Hacker" 1 true]
-               [2 :job [:computer :programmer] 2 true]
-               [2 :salary 40000 2 true]
-               [2 :supervisor 1 2 true]
-               [1 :address [:slumerville [:ridge :road] 10] 2 true]
-               [2 :address [:cambridge [:mass :ave] 78] 2 true]
-               [2 :address [:cambridge [:mass :ave] 78] 3 false]
-               [3 :address [:slumerville [:davis :square] 42] 4 true]]
+  (let [facts [[#unifydb/id 1 :name "Ben Bitdiddle" #unifydb/id 0 true]
+               [#unifydb/id 1 :job [:computer :wizard] #unifydb/id 0 true]
+               [#unifydb/id 1 :salary 60000 #unifydb/id 1 true]
+               [#unifydb/id 2 :name "Alyssa P. Hacker" #unifydb/id 1 true]
+               [#unifydb/id 2 :job [:computer :programmer] #unifydb/id 2 true]
+               [#unifydb/id 2 :salary 40000 #unifydb/id 2 true]
+               [#unifydb/id 2 :supervisor #unifydb/id 1 #unifydb/id 2 true]
+               [#unifydb/id 1 :address [:slumerville [:ridge :road] 10] #unifydb/id 2 true]
+               [#unifydb/id 2 :address [:cambridge [:mass :ave] 78] #unifydb/id 2 true]
+               [#unifydb/id 2 :address [:cambridge [:mass :ave] 78] #unifydb/id 3 false]
+               [#unifydb/id 3 :address [:slumerville [:davis :square] 42] #unifydb/id 4 true]]
         storage-backend (store/store-facts! (store/new! (memstore/new)) facts)
         queue-backend (memqueue/new)
         query-service (query/new queue-backend storage-backend)]
     (try
       (service/start! query-service)
       (testing "Core functions"
-        (is (= [[2]]
+        (is (= [[#unifydb/id 2]]
                (:results
                 @(util/query queue-backend
-                             {:tx-id 4}
+                             {:tx-id #unifydb/id 4}
                              '{:find [?e]
                                :where [[?e :salary ?s]
                                        [?ben :name "Ben Bitdiddle"]
                                        [?ben :salary ?bs]
                                        [(< ?s ?bs)]]}))))
-        (is (= [[1]]
+        (is (= [[#unifydb/id 1]]
                (:results
                 @(util/query queue-backend
-                             {:tx-id 4}
+                             {:tx-id #unifydb/id 4}
                              '{:find [?e]
                                :where [[?e :salary ?s]
                                        [(< 50000 ?s 70000)]]}))))
-        (is (= [[2] [1]]
+        (is (= [[#unifydb/id 2] [#unifydb/id 1]]
                (:results
                 @(util/query queue-backend
-                             {:tx-id 4}
+                             {:tx-id #unifydb/id 4}
                              '{:find [?e]
                                :where [[?e :job ?job]
                                        [(some #{:computer} ?job)]]}))))
-        (is (= [[2]]
+        (is (= [[#unifydb/id 2]]
                (:results
                 @(util/query queue-backend
-                             {:tx-id 4}
+                             {:tx-id #unifydb/id 4}
                              '{:find [?e]
                                :where [[?e :job ?job]
                                        [(some #{:computer} ?job)]
@@ -225,7 +225,7 @@
                 :message "Unbound variable joob"}
                (:error
                 @(util/query queue-backend
-                             {:tx-id 4}
+                             {:tx-id #unifydb/id 4}
                              '{:find [?e]
                                :where [[?e :job ?job]
                                        [(some #{:computer} ?joob)]
@@ -236,7 +236,7 @@
               :message "Unknown predicate foo"}
              (:error
               @(util/query queue-backend
-                           {:tx-id 4}
+                           {:tx-id #unifydb/id 4}
                            '{:find [?e]
                              :where [[?e :salary ?s]
                                      [(foo 50000 ?s 70000)]]}))))
@@ -244,17 +244,17 @@
         (service/stop! query-service)))))
 
 (deftest parameterization
-  (let [facts [[1 :name "Ben Bitdiddle" 0 true]
-               [1 :job [:computer :wizard] 0 true]
-               [1 :salary 60000 1 true]
-               [2 :name "Alyssa P. Hacker" 1 true]
-               [2 :job [:computer :programmer] 2 true]
-               [2 :salary 40000 2 true]
-               [2 :supervisor 1 2 true]
-               [1 :address [:slumerville [:ridge :road] 10] 2 true]
-               [2 :address [:cambridge [:mass :ave] 78] 2 true]
-               [2 :address [:cambridge [:mass :ave] 78] 3 false]
-               [3 :address [:slumerville [:davis :square] 42] 4 true]]
+  (let [facts [[#unifydb/id 1 :name "Ben Bitdiddle" #unifydb/id 0 true]
+               [#unifydb/id 1 :job [:computer :wizard] #unifydb/id 0 true]
+               [#unifydb/id 1 :salary 60000 #unifydb/id 1 true]
+               [#unifydb/id 2 :name "Alyssa P. Hacker" #unifydb/id 1 true]
+               [#unifydb/id 2 :job [:computer :programmer] #unifydb/id 2 true]
+               [#unifydb/id 2 :salary 40000 #unifydb/id 2 true]
+               [#unifydb/id 2 :supervisor #unifydb/id 1 #unifydb/id 2 true]
+               [#unifydb/id 1 :address [:slumerville [:ridge :road] 10] #unifydb/id 2 true]
+               [#unifydb/id 2 :address [:cambridge [:mass :ave] 78] #unifydb/id 2 true]
+               [#unifydb/id 2 :address [:cambridge [:mass :ave] 78] #unifydb/id 3 false]
+               [#unifydb/id 3 :address [:slumerville [:davis :square] 42] #unifydb/id 4 true]]
         storage-backend (store/store-facts! (store/new! (memstore/new)) facts)
         queue-backend (memqueue/new)
         query-service (query/new queue-backend storage-backend)
@@ -266,7 +266,7 @@
                          :where [[?e :name ?name]]
                          :bind {name "Ben Bitdiddle"}}
                 :db db-latest
-                :expected '[[1]]}]]
+                :expected '[[#unifydb/id 1]]}]]
         (testing (str query)
           (is (= expected
                  (:results @(util/query queue-backend db query))))))

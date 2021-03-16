@@ -65,7 +65,7 @@
                                  "accept" "application/edn"
                                  "authorization" auth-header}
                        :body (prn-str
-                              {:tx-id 3
+                              {:tx-id #unifydb/id 3
                                :query '{:find [?name]
                                         :where [[?e :job ["computer" _]]
                                                 [?e :name ?name]]}})})]
@@ -110,14 +110,14 @@
         (is (= (:status response) 200))
         (is (= (:headers response) {"Content-Type" "application/edn"}))
         (is (= (edn/read-string (:body response))
-               {:db-after {:tx-id 3}
-                :tx-data [[1 :name "Ben Bitdiddle" 3 true]
-                          [2 :name "Alyssa P. Hacker" 3 true]
-                          [2 :supervisor 1 3 true]
-                          [3 :unifydb/txInstant tx-instant 3 true]]
-                :tempids {"ben" 1
-                          "alyssa" 2
-                          "unifydb.tx" 3}}))))
+               {:db-after {:tx-id #unifydb/id 3}
+                :tx-data [[#unifydb/id 1 :name "Ben Bitdiddle" #unifydb/id 3 true]
+                          [#unifydb/id 2 :name "Alyssa P. Hacker" #unifydb/id 3 true]
+                          [#unifydb/id 2 :supervisor #unifydb/id 1 #unifydb/id 3 true]
+                          [#unifydb/id 3 :unifydb/txInstant tx-instant #unifydb/id 3 true]]
+                :tempids {"ben" #unifydb/id 1
+                          "alyssa" #unifydb/id 2
+                          "unifydb.tx" #unifydb/id 3}}))))
     (testing "/transact (JSON)"
       (let [response (make-request
                       {:request-method :post

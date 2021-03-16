@@ -27,13 +27,12 @@
   "Fetches facts from the `store` with matching `entity-id`,
   `attribute`, and/or `value`."
   [store {:keys [entity-id attribute value tx-id]}]
-  ;; TODO handle null values
   (let [[search idx] (cond
                        entity-id [[entity-id attribute value tx-id] :eavt]
                        (and value (id/id? value)) [[value attribute entity-id tx-id] :vaet]
                        attribute [[attribute value entity-id tx-id] :avet]
                        :else [[entity-id attribute value tx-id] :eavt])]
-    (map :value (btree/search (index store idx) search))))
+    (map :value (btree/search (index store idx) (vec (take-while (complement nil?) search))))))
 
 (defn get-next-id!
   "Returns the next available sequential ID. Not thread-safe, only
@@ -50,6 +49,5 @@
   [kvstore]
   {:kvstore kvstore
    :indices {:eavt (btree/new! kvstore "eavt" 500)
-             ;; TODO also have AEVT?
              :avet (btree/new! kvstore "avet" 500)
              :vaet (btree/new! kvstore "vaet" 500)}})

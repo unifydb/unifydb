@@ -41,7 +41,7 @@
        (if (string? eid)
          (let [resolved-id (get ids eid)]
            (if-not resolved-id
-             (assoc ids eid (storage/get-next-id storage-backend))
+             (assoc ids eid (storage/get-next-id! storage-backend))
              ids))
          ids)))
    {}

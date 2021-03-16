@@ -21,7 +21,7 @@
         (service/start! transact-service)
         (service/start! query-service)
         @(transact/transact queue-backend tx-data)
-        (is (= @(schema/get-schemas queue-backend 3 [:foo :bar :baz])
+        (is (= @(schema/get-schemas queue-backend #unifydb/id 3 [:foo :bar :baz])
                {:foo {:unifydb/cardinality :cardinality/many
                       :unifydb/schema :foo}
                 :bar {:unifydb/unique :unique/upsert
