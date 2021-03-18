@@ -17,8 +17,10 @@
   [v w]
   (.write w (format "#unifydb/id %s" (.value v))))
 
-(defn id [val]
-  (->ID val))
-
 (defn id? [val]
   (instance? ID val))
+
+(defn id [val]
+  (if (id? val)
+    val
+    (->ID val)))
