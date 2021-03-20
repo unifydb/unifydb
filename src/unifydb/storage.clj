@@ -1,5 +1,6 @@
 (ns unifydb.storage
-  (:require [unifydb.id :as id]
+  (:require [unifydb.facts :as facts]
+            [unifydb.id :as id]
             [unifydb.kvstore :as kvstore]
             [unifydb.storage.btree :as btree]))
 
@@ -12,7 +13,9 @@
   "Puts `facts` into the indexes of the `store`, returning `store`."
   [store facts]
   (doseq [[eid attr value txid added? :as fact] facts]
-    (btree/insert! (index store :eavt) fact fact)
+    (btree/insert! (index store :eavt)
+                   [eid attr value txid added?]
+                   fact)
     (btree/insert! (index store :avet)
                    [attr value eid txid added?]
                    fact)
@@ -28,11 +31,14 @@
   `attribute`, and/or `value`."
   [store {:keys [entity-id attribute value tx-id]}]
   (let [[search idx] (cond
-                       entity-id [[entity-id attribute value tx-id] :eavt]
-                       (and value (id/id? value)) [[value attribute entity-id tx-id] :vaet]
-                       attribute [[attribute value entity-id tx-id] :avet]
-                       :else [[entity-id attribute value tx-id] :eavt])]
-    (map :value (btree/search (index store idx) (vec (take-while (complement nil?) search))))))
+                       entity-id [[entity-id attribute value] :eavt]
+                       (and value (id/id? value)) [[value attribute entity-id] :vaet]
+                       attribute [[attribute value entity-id] :avet]
+                       :else [[entity-id attribute value] :eavt])]
+    (->> (vec (take-while (complement nil?) search))
+         (btree/search (index store idx))
+         (map :value)
+         (filter #(#{0 -1} (compare (facts/fact-tx-id %) tx-id))))))
 
 (defn get-next-id!
   "Returns the next available sequential ID. Not thread-safe, only
