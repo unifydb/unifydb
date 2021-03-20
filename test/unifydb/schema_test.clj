@@ -1,16 +1,17 @@
 (ns unifydb.schema-test
   (:require [clojure.test :refer [deftest testing is]]
+            [unifydb.kvstore.memory :as memstore]
             [unifydb.messagequeue.memory :as memq]
             [unifydb.query :as query]
             [unifydb.schema :as schema]
-            [unifydb.kvstore.memory :as memstore]
             [unifydb.service :as service]
+            [unifydb.storage :as store]
             [unifydb.transact :as transact]))
 
 (deftest test-get-schema
   (testing "get-schemas"
     (let [queue-backend (memq/new)
-          storage-backend (memstore/new)
+          storage-backend (store/new! (memstore/new))
           transact-service (transact/new queue-backend storage-backend)
           query-service (query/new queue-backend storage-backend)
           tx-data [[:unifydb/add "foo" :unifydb/schema :foo]
