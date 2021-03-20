@@ -6,6 +6,7 @@
 
 (defn comparison-class [x]
   (cond (nil? x) ""
+        (= x '_) "unifydb.anything"
         (binding/var? x) "unifydb.variable"
         ;; Lump all numbers together since Clojure's compare can
         ;; compare them all to each other sensibly.
@@ -35,10 +36,12 @@
          y y]
     (if (seq x)
       (if (seq y)
-        (let [c (cmpf (first x) (first y))]
-          (if (zero? c)
-            (recur (rest x) (rest y))
-            c))
+        (if (some #{'&} [(first x) (first y)])
+          0 ;; short-circuit for spread operator
+          (let [c (cmpf (first x) (first y))]
+            (if (zero? c)
+              (recur (rest x) (rest y))
+              c)))
         ;; else we reached end of y first, so x > y
         1)
       (if (seq y)
@@ -60,10 +63,12 @@
         ;; If all elements 0..(len-1) are same, shorter vector comes
         ;; first.
         (compare x-len y-len)
-        (let [c (cmpf (x i) (y i))]
-          (if (zero? c)
-            (recur (inc i))
-            c))))))
+        (if (some #{'&} [(x i) (y i)])
+          0 ;; short-circuit comparison for spread operator
+          (let [c (cmpf (x i) (y i))]
+            (if (zero? c)
+              (recur (inc i))
+              c)))))))
 
 (defn cmp-array-lexi
   [cmpf x y]
@@ -75,10 +80,12 @@
         ;; If all elements 0..(len-1) are same, shorter array comes
         ;; first.
         (compare x-len y-len)
-        (let [c (cmpf (aget x i) (aget y i))]
-          (if (zero? c)
-            (recur (inc i))
-            c))))))
+        (if (some #{'&} [(aget x i) (aget y i)])
+          0 ;; short-circuit for spread operator
+          (let [c (cmpf (aget x i) (aget y i))]
+            (if (zero? c)
+              (recur (inc i))
+              c)))))))
 
 
 (defn cc-cmp
@@ -86,8 +93,8 @@
   (let [x-cls (comparison-class x)
         y-cls (comparison-class y)
         c (compare x-cls y-cls)]
-    (cond (or (= "unifydb.variable" x-cls)
-              (= "unifydb.variable" y-cls)) 0 ;; variables equal to everything
+    (cond (some #{"unifydb.variable" "unifydb.anything"}
+                [x-cls y-cls]) 0 ;; variables equal to everything
 
           (not= c 0) c  ; different classes
 
