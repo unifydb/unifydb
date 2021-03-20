@@ -38,6 +38,9 @@
     (->> (vec (take-while (complement nil?) search))
          (btree/search (index store idx))
          (map :value)
+         ;; TODO I think there is a much more efficient way to do this
+         ;; involving sorting the btree contents by tx-id so we don't need
+         ;; to iterate over the entire result set here
          (filter #(#{0 -1} (compare (facts/fact-tx-id %) tx-id))))))
 
 (defn get-next-id!
