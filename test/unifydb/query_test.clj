@@ -126,7 +126,7 @@
       (service/start! query-service)
       (doseq [{:keys [query db expected]}
               [{:query '{:find [?who]
-                         :where [(:lives-near ?who 1)]
+                         :where [(:lives-near ?who #unifydb/id 1)]
                          :rules [[(:lives-near ?person1 ?person2)
                                   [?person1 :address [?town & _]]
                                   [?person2 :address [?town & _]]
