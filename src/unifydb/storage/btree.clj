@@ -50,6 +50,14 @@
   [node]
   (not (pointer? (node-get node 0))))
 
+(defn cmp-trunc
+  "Truncate vectors `first` and `second` to the same length then compare them."
+  [first second]
+  (let [min-length (min (count first) (count second))
+        first-trunc (subvec first 0 min-length)
+        second-trunc (subvec second 0 min-length)]
+    (comparison/cc-cmp first-trunc second-trunc)))
+
 (defn compare-search-keys
   "Given a search key `first` and a search key `second`, returns 1 if
   first comes after second and -1 if first comes before second. Note
@@ -67,11 +75,8 @@
   [first second]
   (let [first (if (:key first) (:key first) first)
         second (if (:key second) (:key second) second)
-        min-length (min (count first) (count second))
-        first-trunc (subvec first 0 min-length)
-        second-trunc (subvec second 0 min-length)
         zero-val (if (>= (count first) (count second)) 1 -1)
-        comparison (comparison/cc-cmp first-trunc second-trunc)]
+        comparison (cmp-trunc first second)]
     (if (zero? comparison) zero-val comparison)))
 
 (defn search-key-<
@@ -105,7 +110,7 @@
         idx (max 0 (dec bound))
         test-val (node-get node idx)
         test-val (if (:key test-val) (:key test-val) test-val)]
-    (if (= test-val value)
+    (if (= (cmp-trunc test-val value) 0)
       idx
       bound)))
 
@@ -134,7 +139,7 @@
 (defn prefixed-by?
   [value prefix]
   (let [value (if (:key value) (:key value) value)]
-    (= (subvec value 0 (count prefix)) prefix)))
+    (= (comparison/cc-cmp (subvec value 0 (count prefix)) prefix) 0)))
 
 (defn search
   "Searchs `tree`, returning all keys that start with `prefix`."
