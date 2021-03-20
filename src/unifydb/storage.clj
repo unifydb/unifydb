@@ -48,7 +48,7 @@
   call this in the transactor."
   [storage]
   (let [next-id (or (kvstore/get (:kvstore storage) "id-counter")
-                    0)]
+                    1)]
     (kvstore/assoc! (:kvstore storage) "id-counter" (inc next-id))
     (id/id next-id)))
 
