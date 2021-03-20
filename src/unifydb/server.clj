@@ -1,7 +1,5 @@
 (ns unifydb.server
   (:require [aleph.http :as http]
-            [clojure.data.json :as json]
-            [clojure.edn :as edn]
             [clojure.string :as string]
             [compojure.core :as compojure :refer [GET POST]]
             [compojure.route :as route]
@@ -13,52 +11,12 @@
             [taoensso.timbre :as log]
             [unifydb.auth :as auth]
             [unifydb.config :as config]
+            [unifydb.edn :as edn]
+            [unifydb.id :as id]
             [unifydb.service :as service]
             [unifydb.transact :as transact]
             [unifydb.util :as util])
   (:import [java.util UUID]))
-
-(defn edn->json
-  "Transforms idiomatic EDN to a format that can be losslessly represented as JSON."
-  [edn-data]
-  (cond
-    (keyword? edn-data) (str edn-data)
-    (symbol? edn-data) (str "'" edn-data)
-    (and (string? edn-data)
-         (string/starts-with? edn-data ":")) (str "\\" edn-data)
-    (and (string? edn-data)
-         (string/starts-with? edn-data "'")) (str "\\" edn-data)
-    (and (string? edn-data)
-         (string/starts-with? edn-data "\\")) (str "\\" edn-data)
-    (vector? edn-data) (vec (map edn->json edn-data))
-    (map? edn-data) (into {} (map
-                              #(vector (edn->json (first %))
-                                       (edn->json (second %)))
-                              edn-data))
-    (list? edn-data) (into ["#list"] (map edn->json edn-data))
-    (set? edn-data) (into ["#set"] (map edn->json edn-data))
-    :else edn-data))
-
-(defn json->edn
-  "Transforms JSON representing EDN data into actual EDN data. The reverse of edn->json."
-  [json-data]
-  (cond
-    (and (string? json-data)
-         (string/starts-with? json-data ":")) (keyword (subs json-data 1))
-    (and (string? json-data)
-         (string/starts-with? json-data "'")) (symbol (subs json-data 1))
-    (and (string? json-data)
-         (string/starts-with? json-data "\\")) (subs json-data 1)
-    (and (vector? json-data)
-         (= (first json-data) "#list")) (into '() (map json->edn (rest json-data)))
-    (and (vector? json-data)
-         (= (first json-data) "#set")) (set (map json->edn (rest json-data)))
-    (vector? json-data) (vec (map json->edn json-data))
-    (map? json-data) (into {} (map
-                               #(vector (json->edn (first %))
-                                        (json->edn (second %)))
-                               json-data))
-    :else json-data))
 
 (defn query [queue-backend]
   (fn [request]
@@ -98,10 +56,8 @@
   (fn [request]
     (if-let [content-type (request/content-type request)]
       (let [body (condp = (string/lower-case content-type)
-                   "application/json" (-> (request/body-string request)
-                                          (json/read-str)
-                                          (json->edn))
-                   "application/edn" (edn/read-string (request/body-string request))
+                   "application/edn" (edn/read-string
+                                      (request/body-string request))
                    :unsupported)]
         (if (= :unsupported body)
           (d/success-deferred
@@ -112,19 +68,15 @@
 
 (defn wrap-accept-type [handler]
   (fn [request]
-    (let [accept-type (or (get (:headers request) "accept") "application/json")
+    (let [accept-type (or (get (:headers request) "accept") "application/edn")
           wrapper (condp = (string/lower-case accept-type)
-                    "application/json" {:fn #(-> %
-                                                 (edn->json)
-                                                 (json/write-str))
-                                        :type "application/json"}
                     "application/edn" {:fn pr-str :type "application/edn"}
                     "*/*" {:fn pr-str :type "application/edn"}
                     {:error (format "Unsupported accept type %s" accept-type)})]
       (if (:error wrapper)
         (d/success-deferred {:status 400
-                             :headers {"Content-Type" "application/json"}
-                             :body (json/write-str (:error wrapper))})
+                             :headers {"Content-Type" "application/edn"}
+                             :body (pr-str (:error wrapper))})
         (d/chain (handler request)
                  #(update-in % [:body] (:fn wrapper))
                  #(assoc-in % [:headers "Content-Type"] (:type wrapper)))))))
@@ -168,7 +120,6 @@
   (stop! [self]
     (stop-server! (:state self))))
 
-(defn new [queue-backend storage-backend cache]
+(defn new [queue-backend cache]
   (->WebServerService (atom {:queue-backend queue-backend
-                             :storage-backend storage-backend
                              :cache cache})))
