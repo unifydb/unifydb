@@ -5,6 +5,7 @@
             [taoensso.timbre :as log]
             [unifydb.binding :as binding :refer [var? var-name]]
             [unifydb.facts :refer [fact-entity fact-attribute fact-added?]]
+            [unifydb.id :as id]
             [unifydb.messagequeue :as queue]
             [unifydb.rules :refer [rule-body rule-conclusion]]
             [unifydb.schema :as schema]
@@ -172,15 +173,20 @@
   "Returns a seq of frames obtained by pattern-matching the `query`
    against the facts in `db` in the context of `frame`."
   [db query frame]
-  (let [facts (log/spy
+  (let [[eid attr val] (binding/instantiate frame query (fn [v _f] v))
+        tx-id (if (= (:tx-id db) :latest)
+                (id/id Integer/MAX_VALUE)
+                (id/id (:tx-id db)))
+        facts (log/spy
                :debug :processed-facts
                (process-facts
                 db
                 (log/spy :debug :facts
-                         (store/fetch-facts (:storage-backend db)
-                                            query
-                                            (:tx-id db)
-                                            frame))))]
+                         (store/get-matching-facts (:storage-backend db)
+                                                   {:entity-id (when (not (var? eid)) eid)
+                                                    :attribute (when (not (var? attr)) attr)
+                                                    :value (when (not (var? val)) val)
+                                                    :tx-id tx-id}))))]
     (log/spy
      :debug :match-results
      (filter

@@ -7,28 +7,28 @@
             [buddy.core.codecs :as codecs]
             [buddy.core.codecs.base64 :as base64]
             [buddy.core.hash :as hash]
-            [clojure.data.json :as json]
-            [clojure.edn :as edn]
             [clojure.test :refer [deftest testing is]]
+            [unifydb.auth :as auth]
+            [unifydb.cache.memory :as memcache]
             [unifydb.config :as config]
+            [unifydb.edn :as edn]
+            [unifydb.kvstore.memory :as memstore]
             [unifydb.messagequeue :as queue]
             [unifydb.messagequeue.memory :as memq]
             [unifydb.query :as query]
             [unifydb.server :as server]
             [unifydb.service :as service]
-            [unifydb.storage.memory :as memstore]
-            [unifydb.transact :as transact]
-            [unifydb.auth :as auth]
-            [unifydb.cache.memory :as memcache]))
+            [unifydb.storage :as store]
+            [unifydb.transact :as transact]))
 
 (defmacro with-server [[req-fn store-name queue-name token-header-name] txs & body]
   `(with-redefs [config/env (merge config/env {:secret "secret"})]
      (let [~queue-name (memq/new)
            ~store-name (memstore/new)
-           query# (query/new ~queue-name ~store-name)
-           transact# (transact/new ~queue-name ~store-name)
+           query# (query/new ~queue-name (store/new! ~store-name))
+           transact# (transact/new ~queue-name (store/new! ~store-name))
            cache# (memcache/new)
-           server# (server/new ~queue-name ~store-name cache#)
+           server# (server/new ~queue-name cache#)
            ~req-fn (fn [request#]
                      (let [app# (server/app (:state server#))
                            response# (app# request#)]
@@ -65,27 +65,13 @@
                                  "accept" "application/edn"
                                  "authorization" auth-header}
                        :body (prn-str
-                              {:tx-id 3
+                              {:tx-id #unifydb/id 3
                                :query '{:find [?name]
                                         :where [[?e :job ["computer" _]]
                                                 [?e :name ?name]]}})})]
         (is (= response '{:status 200
                           :headers {"Content-Type" "application/edn"}
-                          :body "([\"Alyssa P. Hacker\"] [\"Ben Bitdiddle\"])"}))))
-    (testing "/query (JSON)"
-      (let [response (make-request {:request-method :post
-                                    :uri "/query"
-                                    :headers {"content-type" "application/json"
-                                              "accept" "application/json"
-                                              "authorization" auth-header}
-                                    :body (json/write-str
-                                           {":tx-id" 3
-                                            ":query" {":find" ["'?name"]
-                                                      ":where" [["'?e" ":job" ["computer" "'_"]]
-                                                                ["'?e" ":name" "'?name"]]}})})]
-        (is (= response '{:status 200
-                          :headers {"Content-Type" "application/json"}
-                          :body "[[\"Alyssa P. Hacker\"],[\"Ben Bitdiddle\"]]"}))))))
+                          :body "([\"Alyssa P. Hacker\"] [\"Ben Bitdiddle\"])"}))))))
 
 (deftest transact-endpoint
   (with-server [make-request store queue-backend auth-header]
@@ -109,43 +95,15 @@
                          (nth v 2))]
         (is (= (:status response) 200))
         (is (= (:headers response) {"Content-Type" "application/edn"}))
-        (is (= (edn/read-string (:body response))
-               {:db-after {:tx-id 3}
-                :tx-data [[1 :name "Ben Bitdiddle" 3 true]
-                          [2 :name "Alyssa P. Hacker" 3 true]
-                          [2 :supervisor 1 3 true]
-                          [3 :unifydb/txInstant tx-instant 3 true]]
-                :tempids {"ben" 1
-                          "alyssa" 2
-                          "unifydb.tx" 3}}))))
-    (testing "/transact (JSON)"
-      (let [response (make-request
-                      {:request-method :post
-                       :uri "/transact"
-                       :headers {"content-type" "application/json"
-                                 "accept" "application/json"
-                                 "authorization" auth-header}
-                       :body (json/write-str
-                              {":tx-data" [[":unifydb/add" "ben" ":name" "Ben Bitdiddle"]
-                                           [":unifydb/add" "alyssa" ":name" "Alyssa P. Hacker"]
-                                           [":unifydb/add" "alyssa" ":supervisor" "ben"]]})})
-            tx-instant (as-> (:body response) v
-                         (json/read-str v)
-                         (get v ":tx-data")
-                         (filter #(= ":unifydb/txInstant" (second %)) v)
-                         (first v)
-                         (nth v 2))]
-        (is (= (:status response) 200))
-        (is (= (:headers response) {"Content-Type" "application/json"}))
-        (is (= (json/read-str (:body response))
-               {":db-after" {":tx-id" 6}
-                ":tx-data" [[4 ":name" "Ben Bitdiddle" 6 true]
-                            [5 ":name" "Alyssa P. Hacker" 6 true]
-                            [5 ":supervisor" 4 6 true]
-                            [6 ":unifydb/txInstant" tx-instant 6 true]]
-                ":tempids" {"ben" 4
-                            "alyssa" 5
-                            "unifydb.tx" 6}}))))))
+        (is (= {:db-after {:tx-id #unifydb/id 3}
+                :tx-data [[#unifydb/id 1 :name "Ben Bitdiddle" #unifydb/id 3 true]
+                          [#unifydb/id 2 :name "Alyssa P. Hacker" #unifydb/id 3 true]
+                          [#unifydb/id 2 :supervisor #unifydb/id 1 #unifydb/id 3 true]
+                          [#unifydb/id 3 :unifydb/txInstant tx-instant #unifydb/id 3 true]]
+                :tempids {"ben" #unifydb/id 1
+                          "alyssa" #unifydb/id 2
+                          "unifydb.tx" #unifydb/id 3}}
+               (edn/read-string (:body response))))))))
 
 (deftest test-auth
   (with-server [make-request store queue-backend _auth-header]

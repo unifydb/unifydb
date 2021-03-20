@@ -3,4 +3,5 @@
   {:skip-args [clojure.core.match/match]}
   :unresolved-symbol
   {:exclude [(clojure.core.match/match)]}}
- :lint-as {manifold.deferred/let-flow clojure.core/let}}
+ :lint-as {manifold.deferred/let-flow clojure.core/let}
+ :output {:exclude-files ["src/data_readers.clj"]}}

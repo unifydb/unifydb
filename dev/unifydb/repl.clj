@@ -23,12 +23,14 @@
             [clojure.test :refer [run-tests]]
             [cognitect.test-runner :as test-runner]
             [unifydb.cache.memory :as memcache]
+            [unifydb.id]
+            [unifydb.kvstore.memory :as memstore]
             [unifydb.messagequeue :as queue :refer [publish subscribe]]
             [unifydb.messagequeue.memory :as memq]
             [unifydb.query :as query]
             [unifydb.server :as server]
             [unifydb.service :as service]
-            [unifydb.storage.memory :as memstore]
+            [unifydb.storage :as store]
             [unifydb.structlog :as structlog]
             [unifydb.transact :as transact :refer [transact]]
             [unifydb.util :refer [query]]))
@@ -41,12 +43,13 @@
 
 (defn make-state []
   (let [queue (memq/new)
-        store (memstore/new)
+        kvstore (memstore/new)
+        store (store/new! kvstore)
         cache (memcache/new)]
     {:queue queue
      :store store
      :cache cache
-     :server (server/new queue store cache)
+     :server (server/new queue cache)
      :query (query/new queue store)
      :transact (transact/new queue store)}))
 

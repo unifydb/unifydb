@@ -3,11 +3,12 @@
             [clojure.tools.cli :as cli]
             [taoensso.timbre :as log]
             [unifydb.cache.memory :as memcache]
+            [unifydb.kvstore.memory :as memstore]
             [unifydb.messagequeue.memory :as memq]
             [unifydb.query :as query]
             [unifydb.server :as server]
             [unifydb.service :as service]
-            [unifydb.storage.memory :as memstore]
+            [unifydb.storage :as store]
             [unifydb.transact :as transact]))
 
 (defn usage [opts-summary]
@@ -37,8 +38,9 @@
 (defn make-storage-backend
   "Constructs a new storage backend from the `config` map."
   [config]
-  (condp = (get-in config [:storage-backend :type])
-    :memory (memstore/new)))
+  (let [kvstore (condp = (get-in config [:storage-backend :type])
+                  :memory (memstore/new))]
+    (store/new! kvstore)))
 
 (defn make-cache-backend
   [config]
@@ -51,7 +53,6 @@
         cache (make-cache-backend config)
         service-impls (map #(condp = %
                               "server" (server/new queue-backend
-                                                   storage-backend
                                                    cache)
                               "query" (query/new queue-backend storage-backend)
                               "transact" (transact/new queue-backend

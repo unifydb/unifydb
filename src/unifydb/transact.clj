@@ -41,7 +41,7 @@
        (if (string? eid)
          (let [resolved-id (get ids eid)]
            (if-not resolved-id
-             (assoc ids eid (storage/get-next-id storage-backend))
+             (assoc ids eid (storage/get-next-id! storage-backend))
              ids))
          ids)))
    {}
@@ -72,7 +72,7 @@
                    {:db-after (assoc {} :tx-id tx-id)
                     :tx-data (vec facts)
                     :tempids ids})]
-    (storage/transact-facts! storage-backend facts)
+    (storage/store-facts! storage-backend facts)
     tx-report))
 
 (defn transact-loop [queue-backend storage-backend state]
@@ -98,7 +98,7 @@
       (swap! (:state self) #(assoc % :subscription subscription))
       (.start transact-thread)))
   (stop! [self]
-    (s/close! (:subscription @state))))
+    (s/close! (:subscription @(:state self)))))
 
 (defn new
   "Returns a new transact component instance."

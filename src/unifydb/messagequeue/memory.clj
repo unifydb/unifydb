@@ -107,7 +107,7 @@
   (subscribe [this queue]
     (bus/subscribe (:bus @(:state this)) queue))
   (subscribe [this queue group-id]
-    (subscribe-in-group! state queue group-id)))
+    (subscribe-in-group! (:state this) queue group-id)))
 
 (defn new
   "Returns a new in-memory message queue backend."
