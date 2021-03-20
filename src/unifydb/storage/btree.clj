@@ -53,10 +53,12 @@
 (defn cmp-trunc
   "Truncate vectors `first` and `second` to the same length then compare them."
   [first second]
-  (let [min-length (min (count first) (count second))
-        first-trunc (subvec first 0 min-length)
-        second-trunc (subvec second 0 min-length)]
-    (comparison/cc-cmp first-trunc second-trunc)))
+  (if (and (vector? first) (vector? second))
+    (let [min-length (min (count first) (count second))
+          first-trunc (subvec first 0 min-length)
+          second-trunc (subvec second 0 min-length)]
+      (comparison/cc-cmp first-trunc second-trunc))
+    (comparison/cc-cmp first second)))
 
 (defn compare-search-keys
   "Given a search key `first` and a search key `second`, returns 1 if
