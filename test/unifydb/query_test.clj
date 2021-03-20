@@ -52,7 +52,7 @@
                          :where [[?e :job [:computer _]]]}
                 :db db-latest
                 :expected '[[#unifydb/id 2] [#unifydb/id 1]]}]]
-        (testing (str query)
+        (testing (format "query: %s\ndb: %s" query db)
           (is (= expected
                  (:results @(util/query queue-backend db query))))))
       (finally
@@ -134,9 +134,9 @@
                                  [(:same ?x ?x)]]}
                 :db db
                 :expected '[[#unifydb/id 3]]}]]
-        (testing (str query)
-          (is (= (:results @(util/query queue-backend db query))
-                 expected))))
+        (testing (format "query: %s\ndb: %s" query db)
+          (is (= expected
+                 (:results @(util/query queue-backend db query))))))
       (finally
         (service/stop! query-service)))))
 
