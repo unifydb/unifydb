@@ -12,7 +12,6 @@
             [unifydb.auth :as auth]
             [unifydb.config :as config]
             [unifydb.edn :as edn]
-            [unifydb.id :as id]
             [unifydb.service :as service]
             [unifydb.transact :as transact]
             [unifydb.util :as util])
