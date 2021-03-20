@@ -98,7 +98,7 @@
       (swap! (:state self) #(assoc % :subscription subscription))
       (.start transact-thread)))
   (stop! [self]
-    (s/close! (:subscription @state))))
+    (s/close! (:subscription @(:state self)))))
 
 (defn new
   "Returns a new transact component instance."
