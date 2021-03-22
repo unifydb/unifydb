@@ -3,6 +3,7 @@
             [clojure.tools.cli :as cli]
             [taoensso.timbre :as log]
             [unifydb.cache.memory :as memcache]
+            [unifydb.config :as config]
             [unifydb.kvstore.memory :as memstore]
             [unifydb.messagequeue.memory :as memq]
             [unifydb.query :as query]
@@ -30,27 +31,27 @@
   [["-h" "--help" "Display this message and exit"]])
 
 (defn make-queue-backend
-  "Constructs a new queue backend from the `config` map."
-  [config]
-  (condp = (get-in config [:queue-backend :type])
+  "Constructs a new queue backend."
+  []
+  (condp = (config/queue-backend)
     :memory (memq/new)))
 
 (defn make-storage-backend
-  "Constructs a new storage backend from the `config` map."
-  [config]
-  (let [kvstore (condp = (get-in config [:storage-backend :type])
+  "Constructs a new storage backend."
+  []
+  (let [kvstore (condp = (config/storage-backend)
                   :memory (memstore/new))]
     (store/new! kvstore)))
 
 (defn make-cache-backend
-  [config]
-  (condp = (get-in config [:cache-backend :type])
+  []
+  (condp = (config/cache-backend)
     :memory (memcache/new)))
 
-(defn start-services! [config services]
-  (let [queue-backend (make-queue-backend config)
-        storage-backend (make-storage-backend config)
-        cache (make-cache-backend config)
+(defn start-services! [services]
+  (let [queue-backend (make-queue-backend)
+        storage-backend (make-storage-backend)
+        cache (make-cache-backend)
         service-impls (map #(condp = %
                               "server" (server/new queue-backend
                                                    cache)
@@ -74,7 +75,7 @@
 (defn start
   "Start one or more of the core UnifyDB services."
   ;; TODO validate config with spec
-  [config & args]
+  [args]
   (let [opts (cli/parse-opts args options :in-order true)
         services (if (some #{"all"} (:arguments opts))
                    ["server" "query" "transact"]
@@ -82,5 +83,5 @@
                            ["server" "query" "transact"]))]
     (cond
       (:help (:options opts)) {:exit-message (usage (:summary opts)) :ok? true}
-      (seq services) (start-services! config services)
+      (seq services) (start-services! services)
       :else {:exit-message (usage (:summary opts))})))

@@ -1,28 +1,50 @@
 (ns unifydb.config
   (:require [config.core :as c]))
 
-(def default-config-path "/etc/unifydb/config.edn")
+(defonce env-state (atom {:env nil}))
 
-(defn load-env []
-  (c/load-env (c/read-env-file (or (:unifydb-config c/env)
-                                   default-config-path))))
+(defn load-env!
+  [& {:keys [config-file overrides]
+      :or {config-file (:unifydb-config c/env)
+           overrides {}}}]
+  (swap! env-state assoc :env
+         (c/load-env (c/read-env-file config-file)
+                     overrides)))
 
-(defonce env (load-env))
+(defn get-config
+  [key & {:keys [default required]}]
+  (when (nil? (:env @env-state))
+    (throw (ex-info "Env not initialized" {})))
+  (let [val (get (:env @env-state) key default)]
+    (if (and required (nil? val))
+      (throw (ex-info (format "Missing required config key %s" key)
+                      {:key key}))
+      val)))
 
-(defn reload-env []
-  (alter-var-root #'env (fn [_] (load-env))))
-
-(defn get-required [env key]
-  (if-let [val (get env key)]
-    val
-    (throw (ex-info (format "Missing required config key %s" key)
-                    {:key key}))))
+(defmacro with-config
+  "Overwrite the config in `body` with the values in the `override` map."
+  [overrides & body]
+  `(let [old-config# (:env @env-state)]
+     (swap! env-state #(assoc % :env
+                              (merge (:env %)
+                                     ~overrides)))
+     ~@body
+     (swap! env-state #(assoc % :env old-config#))))
 
 (defn secret []
-  (get-required env :secret))
+  (get-config :secret :required true))
 
 (defn port []
-  (get env :port 8181))
+  (get-config :port :default 8181))
 
 (defn token-ttl-seconds []
-  (get env :token-ttl-seconds 3600))
+  (get-config :token-ttl-seconds :default 3600))
+
+(defn queue-backend []
+  (get-config :queue-backend :default :memory))
+
+(defn storage-backend []
+  (get-config :storage-backend :default :memory))
+
+(defn cache-backend []
+  (get-config :cache-backend :default :memory))

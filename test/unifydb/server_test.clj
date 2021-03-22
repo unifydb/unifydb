@@ -22,7 +22,7 @@
             [unifydb.transact :as transact]))
 
 (defmacro with-server [[req-fn store-name queue-name token-header-name] txs & body]
-  `(with-redefs [config/env (merge config/env {:secret "secret"})]
+  `(config/with-config {:secret "secret"}
      (let [~queue-name (memq/new)
            ~store-name (memstore/new)
            query# (query/new ~queue-name (store/new! ~store-name))
