@@ -1,9 +1,8 @@
 (ns unifydb.cli.unifydb
-  (:require [clojure.edn :as edn]
-            [clojure.string :as string]
+  (:require [clojure.string :as string]
             [clojure.tools.cli :as cli]
-            [unifydb.cli.start :as start])
-  (:import [java.io FileNotFoundException]))
+            [unifydb.cli.start :as start]
+            [unifydb.config :as config]))
 
 (def default-config
   {:port 8181
@@ -27,15 +26,7 @@
 
 (def unifydb-opts
   [["-c" "--config FILE" "Configuration file path"
-    :default-fn (fn [_opts]
-                  (try
-                    (edn/read-string (slurp "/etc/unifydb/config.edn"))
-                    (catch FileNotFoundException _ex default-config)))
-    :default-desc "/etc/unifydb/config.edn"
-    :parse-fn (fn [path]
-                (try
-                  (edn/read-string (slurp path))
-                  (catch FileNotFoundException _ex default-config)))]
+    :default "/etc/unifydb/config.edn"]
    ["-h" "--help" "Display this message and exit"]])
 
 (def help-opts [])
@@ -62,9 +53,10 @@
         config (:config (:options opts))
         subcmd (first (:arguments opts))
         subcmd-args (rest (:arguments opts))]
+    (config/load-env! config)
     (cond
       (:help (:options opts)) {:exit-message (unifydb-usage (:summary opts))
                                :ok? true}
-      (= "start" subcmd) (apply start/start config subcmd-args)
+      (= "start" subcmd) (apply start/start subcmd-args)
       (= "help" subcmd) (apply help config subcmd-args)
       :else {:exit-message (unifydb-usage (:summary opts))})))

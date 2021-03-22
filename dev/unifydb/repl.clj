@@ -23,6 +23,7 @@
             [clojure.test :refer [run-tests]]
             [cognitect.test-runner :as test-runner]
             [unifydb.cache.memory :as memcache]
+            [unifydb.config :as config]
             [unifydb.id]
             [unifydb.kvstore.memory :as memstore]
             [unifydb.messagequeue :as queue :refer [publish subscribe]]
@@ -37,6 +38,8 @@
 
 (structlog/init!)
 (structlog/set-log-formatter! #'structlog/human-format)
+
+(config/load-env!)
 
 (defn run-all-tests []
   (test-runner/test {}))
