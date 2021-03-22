@@ -53,7 +53,7 @@
         config (:config (:options opts))
         subcmd (first (:arguments opts))
         subcmd-args (rest (:arguments opts))]
-    (config/load-env! config)
+    (config/load-env! :config-file config)
     (cond
       (:help (:options opts)) {:exit-message (unifydb-usage (:summary opts))
                                :ok? true}
