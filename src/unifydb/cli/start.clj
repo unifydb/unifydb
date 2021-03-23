@@ -4,6 +4,7 @@
             [taoensso.timbre :as log]
             [unifydb.cache.memory :as memcache]
             [unifydb.config :as config]
+            [unifydb.kvstore.jdbc :as jdbcstore]
             [unifydb.kvstore.memory :as memstore]
             [unifydb.messagequeue.memory :as memq]
             [unifydb.query :as query]
@@ -40,7 +41,8 @@
   "Constructs a new storage backend."
   []
   (let [kvstore (condp = (config/storage-backend)
-                  :memory (memstore/new))]
+                  :memory (memstore/new)
+                  :jdbc (jdbcstore/new! (config/jdbc-url)))]
     (store/new! kvstore)))
 
 (defn make-cache-backend
