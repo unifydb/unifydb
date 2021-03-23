@@ -48,3 +48,8 @@
 
 (defn cache-backend []
   (get-config :cache-backend :default :memory))
+
+(defn jdbc-url []
+  ;; Only required for JDBC storage backend, which is the only
+  ;; circumstances under which this will be called
+  (get-config :jdbc-url :required true))
