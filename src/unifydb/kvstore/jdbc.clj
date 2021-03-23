@@ -60,4 +60,4 @@ CREATE TABLE IF NOT EXISTS unifydb_kvs (
 (defn close!
   "Closes `kvstore`'s underlying database connection."
   [kvstore]
-  (.close (:connection kvstore)))
+  (.close kvstore))
