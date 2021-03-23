@@ -56,3 +56,8 @@ CREATE TABLE IF NOT EXISTS unifydb_kvs (
 )
 " blob-type)])
     (->JDBCKeyValueStore conn)))
+
+(defn close!
+  "Closes `kvstore`'s underlying database connection."
+  [kvstore]
+  (.close (:connection kvstore)))
