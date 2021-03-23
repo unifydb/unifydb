@@ -41,13 +41,13 @@
   (get-config :token-ttl-seconds :default 3600))
 
 (defn queue-backend []
-  (get-config :queue-backend :default :memory))
+  (keyword (get-config :queue-backend :default :memory)))
 
 (defn storage-backend []
-  (get-config :storage-backend :default :memory))
+  (keyword (get-config :storage-backend :default :memory)))
 
 (defn cache-backend []
-  (get-config :cache-backend :default :memory))
+  (keyword (get-config :cache-backend :default :memory)))
 
 (defn jdbc-url []
   ;; Only required for JDBC storage backend, which is the only
