@@ -17,6 +17,7 @@
 (defn make-new-tx-facts
   "Returns the list of database operations to make a new transaction entity."
   []
+  ;; TODO add current user to tx facts
   [[:unifydb/add "unifydb.tx" :unifydb/txInstant (System/currentTimeMillis)]])
 
 (defn process-tx-data
@@ -35,6 +36,8 @@
 (defn gen-temp-ids
   "Returns a map of temporary ids to actual database ids based on the facts"
   [storage-backend facts]
+  ;; TODO transaction ids should be the current unix timestamp, not
+  ;; sequential, to allow for easy temporal querying
   (reduce
    (fn [ids fact]
      (let [eid (fact-entity fact)]
