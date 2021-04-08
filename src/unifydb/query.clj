@@ -158,13 +158,15 @@
                   (keys schemas))]
       (mapcat
        (fn [attr-group]
-         (let [filtered-facts (filter-sorted-facts
-                               []
-                               (reverse
-                                (sort cmp-fact-versions attr-group)))
+         (let [sorted-facts (reverse (sort cmp-fact-versions attr-group))
+               filtered-facts (if (:historical db)
+                                sorted-facts
+                                (filter-sorted-facts
+                                 []
+                                 sorted-facts))
                cardinality (get cardinalities
                                 (fact-attribute (first attr-group)))]
-           (if (= cardinality :cardinality/many)
+           (if (or (:historical db) (= cardinality :cardinality/many))
              filtered-facts
              (take 1 filtered-facts))))
        (vals grouped)))))
