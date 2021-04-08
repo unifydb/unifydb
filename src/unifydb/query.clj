@@ -169,6 +169,12 @@
              (take 1 filtered-facts))))
        (vals grouped)))))
 
+(defn concrete?
+  "Whether `o` is a real value, as opposed to a variable or wildcard."
+  [o]
+  (and (not (var? o))
+       (not (= o '_))))
+
 (defn match-facts
   "Returns a seq of frames obtained by pattern-matching the `query`
    against the facts in `db` in the context of `frame`."
@@ -183,9 +189,9 @@
                 db
                 (log/spy :debug :facts
                          (store/get-matching-facts (:storage-backend db)
-                                                   {:entity-id (when (not (var? eid)) eid)
-                                                    :attribute (when (not (var? attr)) attr)
-                                                    :value (when (not (var? val)) val)
+                                                   {:entity-id (when (concrete? eid) eid)
+                                                    :attribute (when (concrete? attr) attr)
+                                                    :value (when (concrete? val) val)
                                                     :tx-id tx-id}))))]
     (log/spy
      :debug :match-results
