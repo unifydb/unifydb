@@ -37,9 +37,9 @@
 
 ;; A helper function to query the database
 (defn do-query
-  ([query-data] (do-query query-data :latest))
-  ([query-data tx-id]
-   (:results @(query (:queue @db-state) {:tx-id tx-id} query-data))))
+  ([query-data] (do-query query-data {:tx-id :latest}))
+  ([query-data db]
+   (:results @(query (:queue @db-state) db query-data))))
 
 ;; Basic pattern matching - what is Ben's salary?
 (do-query '{:find [?e ?salary]
@@ -65,9 +65,8 @@
                     [?e :name ?name]]})
 
 ;; Destructure lists into first & rest
-(do-query '{:find [?name ?address]
-            :where [[?e :address [:slumerville & ?address]]
-                    [?e :name ?name]]})
+(do-query '{:find [?address]
+            :where [[_ :address [:slumerville & ?address]]]})
 
 ;; Query using predicate functions
 (do-query '{:find [?name ?salary]
@@ -88,21 +87,23 @@
 @(transact (:queue @db-state) move-facts)
 
 ;; Which transactions changed Alyssa's address?
-;; THIS IS BROKEN
-(do-query '{:find [?tx-id ?address ?doc]
+;; This will be nicer once aggregation operations are added (group by tx-id)
+(do-query '{:find [?tx-id ?address ?added ?doc]
             :where [[?e :name "Alyssa P. Hacker"]
-                    [?e :address ?address ?tx-id]
-                    [?tx-id :doc ?doc]]})
+                    [?e :address ?address ?tx-id ?added]
+                    [?tx-id :doc ?doc]]}
+          {:tx-id :latest
+           :historical true})
 
 ;; We can query using the latest version of the database
 (do-query '{:find [?address]
             :where [[#unifydb/id 2 :address ?address]]}
-          :latest)
+          {:tx-id :latest})
 
 ;; Or using a previous transaction as a historical anchor
 (do-query '{:find [?address]
             :where [[#unifydb/id 2 :address ?address]]}
-          #unifydb/id 6)
+          {:tx-id #unifydb/id 6})
 
 ;; Rules let us derive new facts from existing ones
 (do-query '{:find [?name]
