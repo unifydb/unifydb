@@ -29,7 +29,7 @@
   (letfn [(copy [exp]
             (cond
               (var? exp) (let [binding-value (frame-binding frame exp)]
-                           (if binding-value
+                           (if (not (nil? binding-value))
                              (copy binding-value)
                              (unbound-var-handler exp frame)))
               (util/not-nil-seq? exp) (cons (copy (first exp)) (copy (rest exp)))
