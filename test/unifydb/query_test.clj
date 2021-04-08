@@ -51,7 +51,11 @@
                {:query '{:find [?e]
                          :where [[?e :job [:computer _]]]}
                 :db db-latest
-                :expected '[[#unifydb/id 2] [#unifydb/id 1]]}]]
+                :expected '[[#unifydb/id 2] [#unifydb/id 1]]}
+               {:query '{:find [?address]
+                         :where [[_ :address [:slumerville & ?address]]]}
+                :db db-latest
+                :expected '[[[[:davis :square] 42]] [[[:ridge :road] 10]]]}]]
         (testing (format "query: %s\ndb: %s" query db)
           (is (= expected
                  (:results @(util/query queue-backend db query))))))
