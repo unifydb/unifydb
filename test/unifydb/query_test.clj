@@ -276,3 +276,34 @@
                  (:results @(util/query queue-backend db query))))))
       (finally
         (service/stop! query-service)))))
+
+(deftest historical-queries
+  (let [facts [[#unifydb/id 0 :doc "First transaction" #unifydb/id 0 true]
+               [#unifydb/id 1 :address "78 Mass Ave, Cambridge MA" #unifydb/id 0 true]
+               [#unifydb/id 2 :doc "Second transaction" #unifydb/id 2 true]
+               [#unifydb/id 1 :address "78 Mass Ave, Cambridge MA" #unifydb/id 2 false]
+               [#unifydb/id 1 :address "10 Ridge Road, Slumerville MA" #unifydb/id 2 true]]
+        storage-backend (store/store-facts! (store/new! (memstore/new)) facts)
+        queue-backend (memqueue/new)
+        query-service (query/new queue-backend storage-backend)]
+    (try
+      (service/start! query-service)
+      (doseq [{:keys [query db expected]}
+              [{:query '{:find [?tx-id ?address ?added ?doc]
+                         :where [[_ :address ?address ?tx-id ?added]
+                                 [?tx-id :doc ?doc]]}
+                :db {:tx-id :latest
+                     :historical true}
+                :expected [[#unifydb/id 2 "78 Mass Ave, Cambridge MA" false "Second transaction"]
+                           [#unifydb/id 0 "78 Mass Ave, Cambridge MA" true "First transaction"]
+                           [#unifydb/id 2 "10 Ridge Road, Slumerville MA" true "Second transaction"]]}
+               {:query '{:find [?tx-id ?address ?added ?doc]
+                         :where [[_ :address ?address ?tx-id ?added]
+                                 [?tx-id :doc ?doc]]}
+                :db {:tx-id #unifydb/id 0
+                     :historical true}
+                :expected [[#unifydb/id 0 "78 Mass Ave, Cambridge MA" true "First transaction"]]}]]
+        (testing (str query)
+          (is (= expected (:results @(util/query queue-backend db query))))))
+      (finally
+        (service/stop! query-service)))))
