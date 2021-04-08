@@ -98,6 +98,7 @@
 ;; We can query using the latest version of the database
 (do-query '{:find [?address]
             :where [[#unifydb/id 2 :address ?address]]}
+          ;; equivalent to {:tx-id #unifydb/id 7}
           {:tx-id :latest})
 
 ;; Or using a previous transaction as a historical anchor
