@@ -334,12 +334,14 @@
   `frames`, returns the result of applying the aggregration expression
   to the frames."
   [agg frames]
-  (let [apply-agg-single (fn [agg-fn arg]
-                           (apply agg-fn (map #(binding/instantiate % arg)
-                                              frames)))]
+  (let [apply-agg (fn [agg-fn arg]
+                    (agg-fn (map #(binding/instantiate % arg)
+                                 frames)))]
     (match agg
-      (['min arg] :seq) (apply-agg-single min arg)
-      (['max arg] :seq) (apply-agg-single max arg)
+      (['min arg] :seq) (apply-agg (partial apply min) arg)
+      (['max arg] :seq) (apply-agg (partial apply max) arg)
+      (['count arg] :seq) (apply-agg #(count (filter some? %)) arg)
+      (['count-distinct arg] :seq) (apply-agg #(count (set (filter some? %))) arg)
       ([exp & _] :seq) (let [msg (format "Unknown aggregation expression %s" exp)]
                          (throw (ex-info msg
                                          {:code :unknown-aggregation

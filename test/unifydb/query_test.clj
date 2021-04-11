@@ -311,12 +311,18 @@
 (deftest aggregation
   (let [facts [[#unifydb/id 1 :employee/name "Ben Bitdiddle" #unifydb/id 0 true]
                [#unifydb/id 1 :employee/age 45 #unifydb/id 0 true]
+               [#unifydb/id 1 :employee/role [:computer :wizard] #unifydb/id 0 true]
+               [#unifydb/id 1 :employee/nickname "Bennie" #unifydb/id 0 true]
                [#unifydb/id 2 :employee/name "Alyssa P. Hacker" #unifydb/id 0 true]
                [#unifydb/id 2 :employee/age 32 #unifydb/id 0 true]
+               [#unifydb/id 2 :employee/role [:computer :programmer] #unifydb/id 0 true]
+               [#unifydb/id 2 :employee/nickname "Allie" #unifydb/id 0 true]
                [#unifydb/id 3 :employee/name "Oliver Warbucks" #unifydb/id 0 true]
                [#unifydb/id 3 :employee/age 56 #unifydb/id 0 true]
+               [#unifydb/id 3 :employee/role [:chief :executive] #unifydb/id 0 true]
                [#unifydb/id 4 :employee/name "Lem E. Tweakit" #unifydb/id 0 true]
-               [#unifydb/id 4 :employee/age 32 #unifydb/id 0 true]]
+               [#unifydb/id 4 :employee/age 32 #unifydb/id 0 true]
+               [#unifydb/id 4 :employee/role [:computer :programmer] #unifydb/id 0 true] ]
         storage-backend (store/store-facts! (store/new! (memstore/new)) facts)
         queue-backend (memqueue/new)
         query-service (query/new queue-backend storage-backend)]
@@ -331,6 +337,29 @@
                          :where [[_ :employee/age ?age]]}
                 :db {:tx-id :latest}
                 :expected [[56]]}
+               {:query '{:find [(count ?name)]
+                         :where [[_ :employee/name ?name]]}
+                :db {:tx-id :latest}
+                :expected [[4]]}
+               {:query '{:find [(count ?nickname)]
+                         :where [[_ :employee/nickname ?nickname]]}
+                :db {:tx-id :latest}
+                :expected [[2]]}
+               {:query '{:find [(count ?role)]
+                         :where [[_ :employee/role ?role]]}
+                :db {:tx-id :latest}
+                :expected [[4]]}
+               {:query '{:find [(count-distinct ?role)]
+                         :where [[_ :employee/role ?role]]}
+                :db {:tx-id :latest}
+                :expected [[3]]}
+               {:query '{:find [?role (min ?age)]
+                         :where [[?e :employee/role ?role]
+                                 [?e :employee/age ?age]]}
+                :db {:tx-id :latest}
+                :expected [[[:chief :executive] 56]
+                           [[:computer :programmer] 32]
+                           [[:computer :wizard] 45]]}
                {:query '{:find [(foo ?age)]
                          :where [[_ :employee/age ?age]]}
                 :db {:tx-id :latest}
