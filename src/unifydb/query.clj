@@ -324,6 +324,53 @@
   [bind]
   (into {} bind))
 
+(defn aggregate?
+  "Whether `exp` is an aggregatation expression in a find clause."
+  [exp]
+  (list? exp))
+
+(defn aggregate
+  "Given an aggregation expression `agg` and a list of frames
+  `frames`, returns the result of applying the aggregration expression
+  to the frames."
+  [agg frames]
+  (let [exp (first agg)
+        args (rest agg)]
+    (condp = exp
+      (let [msg (format "Unknown aggregation expression %s" exp)]
+        (throw (ex-info msg
+                        {:code :unknown-aggregation
+                         :aggregation (str exp)
+                         :message msg}))))))
+
+(defn realize-find
+  "Given a group of frames and a find clause, returns a result row."
+  [find frame-group]
+  (vec
+   (for [exp find]
+     (cond
+       (aggregate? exp) (aggregate exp frame-group)
+       (var? exp) (binding/instantiate (first frame-group)
+                                       exp
+                                       (fn [v _f] v))))))
+
+(defn process-frames
+  "Processes `frames` returns from a `qeval` against the `find`
+  clause, returning a vector of query results. Aggregates frames based
+  on any aggregation expressions in the `find`"
+  [find frames]
+  (let [grouping-vars (filter var? find)
+        groupings (if (empty? grouping-vars)
+                    ;; If there's nothing to group by, just have one big group
+                    {:all frames}
+                    (group-by (apply juxt
+                                     (map (fn [var]
+                                            (fn [frame]
+                                              (binding/instantiate frame var (fn [v _f] v))))
+                                          grouping-vars))
+                              frames))]
+    (vec (map (partial realize-find find) (vals groupings)))))
+
 (defn do-query
   "Runs the query `q` against `db`, returning a seq of instantiated
   find clauses for each frame"
@@ -333,10 +380,8 @@
         processed-find (vec (expand-question-marks find))
         processed-rules (process-rules rules)
         processed-bind (process-bind bind)]
-    (map
-     (fn [frame]
-       (vec (binding/instantiate frame processed-find (fn [v _f] v))))
-     (qeval db processed-where processed-rules [processed-bind]))))
+    (process-frames processed-find
+                    (qeval db processed-where processed-rules [processed-bind]))))
 
 (defn query-callback [queue-backend storage-backend msg]
   (log/debug "Received query message" :message msg)

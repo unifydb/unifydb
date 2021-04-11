@@ -307,3 +307,31 @@
           (is (= expected (:results @(util/query queue-backend db query))))))
       (finally
         (service/stop! query-service)))))
+
+(deftest aggregation
+  (let [facts [[#unifydb/id 1 :employee/name "Ben Bitdiddle" #unifydb/id 0 true]
+               [#unifydb/id 1 :employee/age 45 #unifydb/id 0 true]
+               [#unifydb/id 2 :employee/name "Alyssa P. Hacker" #unifydb/id 0 true]
+               [#unifydb/id 2 :employee/age 32 #unifydb/id 0 true]
+               [#unifydb/id 3 :employee/name "Oliver Warbucks" #unifydb/id 0 true]
+               [#unifydb/id 3 :employee/age 56 #unifydb/id 0 true]
+               [#unifydb/id 4 :employee/name "Lem E. Tweakit" #unifydb/id 0 true]
+               [#unifydb/id 4 :employee/age 32 #unifydb/id 0 true]]
+        storage-backend (store/store-facts! (store/new! (memstore/new)) facts)
+        queue-backend (memqueue/new)
+        query-service (query/new queue-backend storage-backend)]
+    (try
+      (service/start! query-service)
+      (doseq [{:keys [query db expected expected-error]}
+              [{:query '{:find [(foo ?age)]
+                         :where [[_ :employee/age ?age]]}
+                :db {:tx-id :latest}
+                :expected-error {:message "Unknown aggregation expression foo"
+                                 :code :unknown-aggregation
+                                 :aggregation "foo"}}]]
+        (testing (str query)
+          (if expected-error
+            (is (= expected-error (:error @(util/query queue-backend db query))))
+            (is (= expected (:results @(util/query queue-backend db query)))))))
+      (finally
+        (service/stop! query-service)))))
