@@ -181,7 +181,7 @@
   "Returns a seq of frames obtained by pattern-matching the `query`
    against the facts in `db` in the context of `frame`."
   [db query frame]
-  (let [[eid attr val] (binding/instantiate frame query (fn [v _f] v))
+  (let [[eid attr val] (binding/instantiate frame query)
         tx-id (if (= (:tx-id db) :latest)
                 (id/id Integer/MAX_VALUE)
                 (id/id (:tx-id db)))
@@ -334,14 +334,17 @@
   `frames`, returns the result of applying the aggregration expression
   to the frames."
   [agg frames]
-  (let [exp (first agg)
-        args (rest agg)]
-    (condp = exp
-      (let [msg (format "Unknown aggregation expression %s" exp)]
-        (throw (ex-info msg
-                        {:code :unknown-aggregation
-                         :aggregation (str exp)
-                         :message msg}))))))
+  (let [apply-agg-single (fn [agg-fn arg]
+                           (apply agg-fn (map #(binding/instantiate % arg)
+                                              frames)))]
+    (match agg
+      (['min arg] :seq) (apply-agg-single min arg)
+      (['max arg] :seq) (apply-agg-single max arg)
+      ([exp & _] :seq) (let [msg (format "Unknown aggregation expression %s" exp)]
+                         (throw (ex-info msg
+                                         {:code :unknown-aggregation
+                                          :aggregation (str exp)
+                                          :message msg}))))))
 
 (defn realize-find
   "Given a group of frames and a find clause, returns a result row."
@@ -350,9 +353,7 @@
    (for [exp find]
      (cond
        (aggregate? exp) (aggregate exp frame-group)
-       (var? exp) (binding/instantiate (first frame-group)
-                                       exp
-                                       (fn [v _f] v))))))
+       (var? exp) (binding/instantiate (first frame-group) exp)))))
 
 (defn process-frames
   "Processes `frames` returns from a `qeval` against the `find`
@@ -366,7 +367,7 @@
                     (group-by (apply juxt
                                      (map (fn [var]
                                             (fn [frame]
-                                              (binding/instantiate frame var (fn [v _f] v))))
+                                              (binding/instantiate frame var)))
                                           grouping-vars))
                               frames))]
     (vec (map (partial realize-find find) (vals groupings)))))

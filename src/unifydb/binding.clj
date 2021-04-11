@@ -25,13 +25,14 @@
   "Instantiates the `query` with the bindings in `frame`,
    calling `unbound-var-handler` if there exists a variable
    in the query with no binding in the frame."
-  [frame query unbound-var-handler]
-  (letfn [(copy [exp]
-            (cond
-              (var? exp) (let [binding-value (frame-binding frame exp)]
-                           (if (not (nil? binding-value))
-                             (copy binding-value)
-                             (unbound-var-handler exp frame)))
-              (util/not-nil-seq? exp) (cons (copy (first exp)) (copy (rest exp)))
-              :else exp))]
-    (copy query)))
+  ([frame query] (instantiate frame query (fn [v _f] v)))
+  ([frame query unbound-var-handler]
+   (letfn [(copy [exp]
+             (cond
+               (var? exp) (let [binding-value (frame-binding frame exp)]
+                            (if (not (nil? binding-value))
+                              (copy binding-value)
+                              (unbound-var-handler exp frame)))
+               (util/not-nil-seq? exp) (cons (copy (first exp)) (copy (rest exp)))
+               :else exp))]
+     (copy query))))

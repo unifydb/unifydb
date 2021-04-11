@@ -323,7 +323,15 @@
     (try
       (service/start! query-service)
       (doseq [{:keys [query db expected expected-error]}
-              [{:query '{:find [(foo ?age)]
+              [{:query '{:find [(min ?age)]
+                         :where [[_ :employee/age ?age]]}
+                :db {:tx-id :latest}
+                :expected [[32]]}
+               {:query '{:find [(max ?age)]
+                         :where [[_ :employee/age ?age]]}
+                :db {:tx-id :latest}
+                :expected [[56]]}
+               {:query '{:find [(foo ?age)]
                          :where [[_ :employee/age ?age]]}
                 :db {:tx-id :latest}
                 :expected-error {:message "Unknown aggregation expression foo"
