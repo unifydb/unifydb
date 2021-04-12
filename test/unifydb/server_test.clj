@@ -71,7 +71,7 @@
                                                 [?e :name ?name]]}})})]
         (is (= response '{:status 200
                           :headers {"Content-Type" "application/edn"}
-                          :body "([\"Alyssa P. Hacker\"] [\"Ben Bitdiddle\"])"}))))))
+                          :body "[[\"Alyssa P. Hacker\"] [\"Ben Bitdiddle\"]]"}))))))
 
 (deftest transact-endpoint
   (with-server [make-request store queue-backend auth-header]
