@@ -368,6 +368,14 @@
                 :expected [[[:computer :programmer] 32]
                            [[:computer :wizard] 45]
                            [[:chief :executive] 56]]}
+               {:query '{:find [?role (min ?age)]
+                         :where [[?e :employee/role ?role]
+                                 [?e :employee/age ?age]]
+                         :sort-by [(min ?age) :desc]}
+                :db {:tx-id :latest}
+                :expected [[[:chief :executive] 56]
+                           [[:computer :wizard] 45]
+                           [[:computer :programmer] 32]]}
                {:query '{:find [?name]
                          :where [[?e :employee/name ?name]
                                  [?e :employee/age ?age]]

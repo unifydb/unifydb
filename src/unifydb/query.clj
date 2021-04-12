@@ -4,6 +4,7 @@
             [manifold.stream :as s]
             [taoensso.timbre :as log]
             [unifydb.binding :as binding :refer [var? var-name]]
+            [unifydb.comparison :as comparison]
             [unifydb.facts :refer [fact-entity fact-attribute fact-added?]]
             [unifydb.id :as id]
             [unifydb.messagequeue :as queue]
@@ -364,10 +365,13 @@
 
 (defn sort-results
   "Sorts a list of result maps `results` by the `sort-clause`"
-  [sort-clause results]
+  [sort-clause sort-direction results]
   (if (nil? sort-clause)
     results
     (sort-by (apply juxt (map (fn [exp] #(get % exp)) sort-clause))
+             (if (= sort-direction :desc)
+               #(comparison/cc-cmp %2 %1)
+               comparison/cc-cmp)
              results)))
 
 (defn process-frames
@@ -375,7 +379,7 @@
   clause, returning a vector of query results. Results are sorted by
   `sort-by`, it it's not nil. Aggregates frames based on any
   aggregation expressions in the `find` and the `sort-by`."
-  [find sort-by frames]
+  [find sort-by sort-direction frames]
   (let [grouping-vars (set (concat (filter var? find)
                                    (filter var? sort-by)))
         groupings (if (empty? grouping-vars)
@@ -388,13 +392,19 @@
                                           grouping-vars))
                               frames))
         result-maps (map (partial process-results find sort-by) (vals groupings))]
-    (vec (map (partial realize-find find) (sort-results sort-by result-maps)))))
+    (vec (map (partial realize-find find)
+              (sort-results sort-by sort-direction result-maps)))))
 
 (defn process-sort-by
   [sort-by]
-  (when-not (nil? sort-by)
-    (let [sort-by (if (vector? sort-by) sort-by [sort-by])]
-      (vec (expand-question-marks sort-by)))))
+  (if-not (nil? sort-by)
+    (let [sort-by (if (vector? sort-by) sort-by [sort-by])
+          direction (if (= (last sort-by) :desc) :desc :asc)
+          sort-by (if (#{:desc :asc} (last sort-by))
+                    (subvec sort-by 0 (dec (count sort-by)))
+                    sort-by)]
+      [direction (vec (expand-question-marks sort-by))])
+    [:asc nil]))
 
 (defn do-query
   "Runs the query `q` against `db`, returning a seq of instantiated
@@ -404,10 +414,11 @@
         processed-where (process-where where)
         processed-find (vec (expand-question-marks find))
         processed-rules (process-rules rules)
-        processed-sort-by (process-sort-by sort-by)
+        [sort-direction processed-sort-by] (process-sort-by sort-by)
         processed-bind (process-bind bind)]
     (process-frames processed-find
                     processed-sort-by
+                    sort-direction
                     (qeval db processed-where processed-rules [processed-bind]))))
 
 (defn query-callback [queue-backend storage-backend msg]
