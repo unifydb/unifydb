@@ -348,21 +348,36 @@
                                           :aggregation (str exp)
                                           :message msg}))))))
 
+(defn process-results
+  "Returns a list of maps where the keys are expressions and the
+  values are their values for the `frame-group`."
+  [find sort-by frame-group]
+  (into {} (for [exp (set (concat find sort-by))]
+             (cond
+               (aggregate? exp) [exp (aggregate exp frame-group)]
+               (var? exp) [exp (binding/instantiate (first frame-group) exp)]))))
+
 (defn realize-find
   "Given a group of frames and a find clause, returns a result row."
-  [find frame-group]
-  (vec
-   (for [exp find]
-     (cond
-       (aggregate? exp) (aggregate exp frame-group)
-       (var? exp) (binding/instantiate (first frame-group) exp)))))
+  [find result-map]
+  (vec (map (partial get result-map) find)))
+
+(defn sort-results
+  "Sorts a list of result maps `results` by the `sort-clause`"
+  [sort-clause results]
+  (if (nil? sort-clause)
+    results
+    (sort-by (apply juxt (map (fn [exp] #(get % exp)) sort-clause))
+             results)))
 
 (defn process-frames
   "Processes `frames` returns from a `qeval` against the `find`
-  clause, returning a vector of query results. Aggregates frames based
-  on any aggregation expressions in the `find`"
-  [find frames]
-  (let [grouping-vars (filter var? find)
+  clause, returning a vector of query results. Results are sorted by
+  `sort-by`, it it's not nil. Aggregates frames based on any
+  aggregation expressions in the `find` and the `sort-by`."
+  [find sort-by frames]
+  (let [grouping-vars (set (concat (filter var? find)
+                                   (filter var? sort-by)))
         groupings (if (empty? grouping-vars)
                     ;; If there's nothing to group by, just have one big group
                     {:all frames}
@@ -371,19 +386,28 @@
                                             (fn [frame]
                                               (binding/instantiate frame var)))
                                           grouping-vars))
-                              frames))]
-    (vec (map (partial realize-find find) (vals groupings)))))
+                              frames))
+        result-maps (map (partial process-results find sort-by) (vals groupings))]
+    (vec (map (partial realize-find find) (sort-results sort-by result-maps)))))
+
+(defn process-sort-by
+  [sort-by]
+  (when-not (nil? sort-by)
+    (let [sort-by (if (vector? sort-by) sort-by [sort-by])]
+      (vec (expand-question-marks sort-by)))))
 
 (defn do-query
   "Runs the query `q` against `db`, returning a seq of instantiated
   find clauses for each frame"
   [db q]
-  (let [{:keys [find where rules bind]} q
+  (let [{:keys [find where rules sort-by bind]} q
         processed-where (process-where where)
         processed-find (vec (expand-question-marks find))
         processed-rules (process-rules rules)
+        processed-sort-by (process-sort-by sort-by)
         processed-bind (process-bind bind)]
     (process-frames processed-find
+                    processed-sort-by
                     (qeval db processed-where processed-rules [processed-bind]))))
 
 (defn query-callback [queue-backend storage-backend msg]

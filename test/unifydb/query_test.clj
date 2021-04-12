@@ -360,6 +360,32 @@
                 :expected [[[:chief :executive] 56]
                            [[:computer :programmer] 32]
                            [[:computer :wizard] 45]]}
+               {:query '{:find [?role (min ?age)]
+                         :where [[?e :employee/role ?role]
+                                 [?e :employee/age ?age]]
+                         :sort-by (min ?age)}
+                :db {:tx-id :latest}
+                :expected [[[:computer :programmer] 32]
+                           [[:computer :wizard] 45]
+                           [[:chief :executive] 56]]}
+               {:query '{:find [?name]
+                         :where [[?e :employee/name ?name]
+                                 [?e :employee/age ?age]]
+                         :sort-by [?age]}
+                :db {:tx-id :latest}
+                :expected [["Alyssa P. Hacker"]
+                           ["Lem E. Tweakit"]
+                           ["Ben Bitdiddle"]
+                           ["Oliver Warbucks"]]}
+               {:query '{:find [?role ?name]
+                         :where [[?e :employee/role ?role]
+                                 [?e :employee/name ?name]]
+                         :sort-by [?role ?name]}
+                :db {:tx-id :latest}
+                :expected [[[:chief :executive] "Oliver Warbucks"]
+                           [[:computer :programmer] "Alyssa P. Hacker"]
+                           [[:computer :programmer] "Lem E. Tweakit"]
+                           [[:computer :wizard] "Ben Bitdiddle"]]}
                {:query '{:find [(foo ?age)]
                          :where [[_ :employee/age ?age]]}
                 :db {:tx-id :latest}
