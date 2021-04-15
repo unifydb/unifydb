@@ -329,7 +329,11 @@
     (try
       (service/start! query-service)
       (doseq [{:keys [query db expected expected-error]}
-              [{:query '{:find [(min ?age)]
+              [{:query '{:find [(sum ?age)]
+                         :where [[_ :employee/age ?age]]}
+                :db {:tx-id :latest}
+                :expected [[165]]}
+               {:query '{:find [(min ?age)]
                          :where [[_ :employee/age ?age]]}
                 :db {:tx-id :latest}
                 :expected [[32]]}
@@ -385,6 +389,14 @@
                            ["Lem E. Tweakit"]
                            ["Ben Bitdiddle"]
                            ["Oliver Warbucks"]]}
+               {:query '{:find [?name]
+                         :where [[?e :employee/name ?name]
+                                 [?e :employee/age ?age]]
+                         :sort-by [?age]
+                         :limit 2}
+                :db {:tx-id :latest}
+                :expected [["Alyssa P. Hacker"]
+                           ["Lem E. Tweakit"]]}
                {:query '{:find [?role ?name]
                          :where [[?e :employee/role ?role]
                                  [?e :employee/name ?name]]
@@ -400,6 +412,26 @@
                 :expected [[#{[:computer :programmer]
                               [:computer :wizard]
                               [:chief :executive]}]]}
+               {:query '{:find [(mean ?age)]
+                         :where [[_ :employee/age ?age]]}
+                :db {:tx-id :latest}
+                :expected [[165/4]]}
+               {:query '{:find [(avg ?age)]
+                         :where [[_ :employee/age ?age]]}
+                :db {:tx-id :latest}
+                :expected [[165/4]]}
+               {:query '{:find [(median ?age)]
+                         :where [[_ :employee/age ?age]]}
+                :db {:tx-id :latest}
+                :expected [[77/2]]}
+               {:query '{:find [(mode ?age)]
+                         :where [[_ :employee/age ?age]]}
+                :db {:tx-id :latest}
+                :expected [[[32]]]}
+               {:query '{:find [(stddev ?age)]
+                         :where [[_ :employee/age ?age]]}
+                :db {:tx-id :latest}
+                :expected [[11.586630226256467]]}
                {:query '{:find [(foo ?age)]
                          :where [[_ :employee/age ?age]]}
                 :db {:tx-id :latest}
