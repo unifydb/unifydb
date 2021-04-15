@@ -394,6 +394,12 @@
                            [[:computer :programmer] "Alyssa P. Hacker"]
                            [[:computer :programmer] "Lem E. Tweakit"]
                            [[:computer :wizard] "Ben Bitdiddle"]]}
+               {:query '{:find [(distinct ?role)]
+                         :where [[_ :employee/role ?role]]}
+                :db {:tx-id :latest}
+                :expected [[#{[:computer :programmer]
+                              [:computer :wizard]
+                              [:chief :executive]}]]}
                {:query '{:find [(foo ?age)]
                          :where [[_ :employee/age ?age]]}
                 :db {:tx-id :latest}

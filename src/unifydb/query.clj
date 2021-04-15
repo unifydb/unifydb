@@ -343,6 +343,7 @@
       (['max arg] :seq) (apply-agg (partial apply max) arg)
       (['count arg] :seq) (apply-agg #(count (filter some? %)) arg)
       (['count-distinct arg] :seq) (apply-agg #(count (set (filter some? %))) arg)
+      (['distinct arg] :seq) (apply-agg (partial apply (comp set list)) arg)
       ([exp & _] :seq) (let [msg (format "Unknown aggregation expression %s" exp)]
                          (throw (ex-info msg
                                          {:code :unknown-aggregation
