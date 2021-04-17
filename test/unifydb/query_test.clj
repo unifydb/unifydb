@@ -444,3 +444,38 @@
             (is (= expected (:results @(util/query queue-backend db query)))))))
       (finally
         (service/stop! query-service)))))
+
+(deftest binding-functions
+  (let [facts [[#unifydb/id 1 :item/name "Item 1" #unifydb/id 0 true]
+               [#unifydb/id 1 :item/cost 10 #unifydb/id 0 true]
+               [#unifydb/id 2 :item/name "Item 2" #unifydb/id 0 true]
+               [#unifydb/id 2 :item/cost 25 #unifydb/id 0 true]
+               [#unifydb/id 3 :item/name "Item 3" #unifydb/id 0 true]
+               [#unifydb/id 3 :item/cost 15 #unifydb/id 0 true]
+               [#unifydb/id 4 :order/id "123abc" #unifydb/id 0 true]
+               [#unifydb/id 5 :line-item/item #unifydb/id 1 #unifydb/id 0 true]
+               [#unifydb/id 5 :line-item/quantity 2 #unifydb/id 0 true]
+               [#unifydb/id 6 :line-item/item #unifydb/id 2 #unifydb/id 0 true]
+               [#unifydb/id 6 :line-item/quantity 1 #unifydb/id 0 true]
+               [#unifydb/id 7 :line-item/item #unifydb/id 3 #unifydb/id 0 true]
+               [#unifydb/id 7 :line-item/quantity 3 #unifydb/id 0 true]]
+        storage-backend (store/store-facts! (store/new! (memstore/new)) facts)
+        queue-backend (memqueue/new)
+        query-service (query/new queue-backend storage-backend)]
+    (try
+      (service/start! query-service)
+      (doseq [{:keys [query db expected expected-error]}
+              [{:query '{:find [?order (sum ?total)]
+                         :where [[?o :order/id ?order]
+                                 [?li :line-item/item ?i]
+                                 [?li :line-item/quantify ?q]
+                                 [?i :item/cost ?cost]
+                                 [(* ?q ?cost) ?total]]}
+                :db {:tx-id :latest}
+                :expected [["123abc" 90]]}]]
+        (testing (str query)
+          (if expected-error
+            (is (= expected-error (:error @(util/query queue-backend db query))))
+            (is (= expected (:results @(util/query queue-backend db query)))))))
+      (finally
+        (service/stop! query-service)))))
