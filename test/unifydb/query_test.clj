@@ -307,3 +307,140 @@
           (is (= expected (:results @(util/query queue-backend db query))))))
       (finally
         (service/stop! query-service)))))
+
+(deftest aggregation
+  (let [facts [[#unifydb/id 1 :employee/name "Ben Bitdiddle" #unifydb/id 0 true]
+               [#unifydb/id 1 :employee/age 45 #unifydb/id 0 true]
+               [#unifydb/id 1 :employee/role [:computer :wizard] #unifydb/id 0 true]
+               [#unifydb/id 1 :employee/nickname "Bennie" #unifydb/id 0 true]
+               [#unifydb/id 2 :employee/name "Alyssa P. Hacker" #unifydb/id 0 true]
+               [#unifydb/id 2 :employee/age 32 #unifydb/id 0 true]
+               [#unifydb/id 2 :employee/role [:computer :programmer] #unifydb/id 0 true]
+               [#unifydb/id 2 :employee/nickname "Allie" #unifydb/id 0 true]
+               [#unifydb/id 3 :employee/name "Oliver Warbucks" #unifydb/id 0 true]
+               [#unifydb/id 3 :employee/age 56 #unifydb/id 0 true]
+               [#unifydb/id 3 :employee/role [:chief :executive] #unifydb/id 0 true]
+               [#unifydb/id 4 :employee/name "Lem E. Tweakit" #unifydb/id 0 true]
+               [#unifydb/id 4 :employee/age 32 #unifydb/id 0 true]
+               [#unifydb/id 4 :employee/role [:computer :programmer] #unifydb/id 0 true] ]
+        storage-backend (store/store-facts! (store/new! (memstore/new)) facts)
+        queue-backend (memqueue/new)
+        query-service (query/new queue-backend storage-backend)]
+    (try
+      (service/start! query-service)
+      (doseq [{:keys [query db expected expected-error]}
+              [{:query '{:find [(sum ?age)]
+                         :where [[_ :employee/age ?age]]}
+                :db {:tx-id :latest}
+                :expected [[165]]}
+               {:query '{:find [(min ?age)]
+                         :where [[_ :employee/age ?age]]}
+                :db {:tx-id :latest}
+                :expected [[32]]}
+               {:query '{:find [(max ?age)]
+                         :where [[_ :employee/age ?age]]}
+                :db {:tx-id :latest}
+                :expected [[56]]}
+               {:query '{:find [(count ?name)]
+                         :where [[_ :employee/name ?name]]}
+                :db {:tx-id :latest}
+                :expected [[4]]}
+               {:query '{:find [(count ?nickname)]
+                         :where [[_ :employee/nickname ?nickname]]}
+                :db {:tx-id :latest}
+                :expected [[2]]}
+               {:query '{:find [(count ?role)]
+                         :where [[_ :employee/role ?role]]}
+                :db {:tx-id :latest}
+                :expected [[4]]}
+               {:query '{:find [(count-distinct ?role)]
+                         :where [[_ :employee/role ?role]]}
+                :db {:tx-id :latest}
+                :expected [[3]]}
+               {:query '{:find [?role (min ?age)]
+                         :where [[?e :employee/role ?role]
+                                 [?e :employee/age ?age]]}
+                :db {:tx-id :latest}
+                :expected [[[:chief :executive] 56]
+                           [[:computer :programmer] 32]
+                           [[:computer :wizard] 45]]}
+               {:query '{:find [?role (min ?age)]
+                         :where [[?e :employee/role ?role]
+                                 [?e :employee/age ?age]]
+                         :sort-by (min ?age)}
+                :db {:tx-id :latest}
+                :expected [[[:computer :programmer] 32]
+                           [[:computer :wizard] 45]
+                           [[:chief :executive] 56]]}
+               {:query '{:find [?role (min ?age)]
+                         :where [[?e :employee/role ?role]
+                                 [?e :employee/age ?age]]
+                         :sort-by [(min ?age) :desc]}
+                :db {:tx-id :latest}
+                :expected [[[:chief :executive] 56]
+                           [[:computer :wizard] 45]
+                           [[:computer :programmer] 32]]}
+               {:query '{:find [?name]
+                         :where [[?e :employee/name ?name]
+                                 [?e :employee/age ?age]]
+                         :sort-by [?age]}
+                :db {:tx-id :latest}
+                :expected [["Alyssa P. Hacker"]
+                           ["Lem E. Tweakit"]
+                           ["Ben Bitdiddle"]
+                           ["Oliver Warbucks"]]}
+               {:query '{:find [?name]
+                         :where [[?e :employee/name ?name]
+                                 [?e :employee/age ?age]]
+                         :sort-by [?age]
+                         :limit 2}
+                :db {:tx-id :latest}
+                :expected [["Alyssa P. Hacker"]
+                           ["Lem E. Tweakit"]]}
+               {:query '{:find [?role ?name]
+                         :where [[?e :employee/role ?role]
+                                 [?e :employee/name ?name]]
+                         :sort-by [?role ?name]}
+                :db {:tx-id :latest}
+                :expected [[[:chief :executive] "Oliver Warbucks"]
+                           [[:computer :programmer] "Alyssa P. Hacker"]
+                           [[:computer :programmer] "Lem E. Tweakit"]
+                           [[:computer :wizard] "Ben Bitdiddle"]]}
+               {:query '{:find [(distinct ?role)]
+                         :where [[_ :employee/role ?role]]}
+                :db {:tx-id :latest}
+                :expected [[#{[:computer :programmer]
+                              [:computer :wizard]
+                              [:chief :executive]}]]}
+               {:query '{:find [(mean ?age)]
+                         :where [[_ :employee/age ?age]]}
+                :db {:tx-id :latest}
+                :expected [[165/4]]}
+               {:query '{:find [(avg ?age)]
+                         :where [[_ :employee/age ?age]]}
+                :db {:tx-id :latest}
+                :expected [[165/4]]}
+               {:query '{:find [(median ?age)]
+                         :where [[_ :employee/age ?age]]}
+                :db {:tx-id :latest}
+                :expected [[77/2]]}
+               {:query '{:find [(mode ?age)]
+                         :where [[_ :employee/age ?age]]}
+                :db {:tx-id :latest}
+                :expected [[[32]]]}
+               {:query '{:find [(stddev ?age)]
+                         :where [[_ :employee/age ?age]]}
+                :db {:tx-id :latest}
+                :expected [[11.586630226256467]]}
+               {:query '{:find [(foo ?age)]
+                         :where [[_ :employee/age ?age]]}
+                :db {:tx-id :latest}
+                :expected-error {:message "Unknown aggregation expression foo"
+                                 :code :unknown-aggregation
+                                 :aggregation "foo"}}]]
+        (testing (str query)
+          (if expected-error
+            (is (= expected-error (:error @(util/query queue-backend db query))))
+            (is (= expected (:results @(util/query queue-backend db query)))))))
+      (finally
+        (service/stop! query-service)))))

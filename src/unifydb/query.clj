@@ -4,12 +4,14 @@
             [manifold.stream :as s]
             [taoensso.timbre :as log]
             [unifydb.binding :as binding :refer [var? var-name]]
+            [unifydb.comparison :as comparison]
             [unifydb.facts :refer [fact-entity fact-attribute fact-added?]]
             [unifydb.id :as id]
             [unifydb.messagequeue :as queue]
             [unifydb.rules :refer [rule-body rule-conclusion]]
             [unifydb.schema :as schema]
             [unifydb.service :as service]
+            [unifydb.statistics :as stats]
             [unifydb.storage :as store]
             [unifydb.unify :as unify]
             [unifydb.util :as util])
@@ -181,7 +183,7 @@
   "Returns a seq of frames obtained by pattern-matching the `query`
    against the facts in `db` in the context of `frame`."
   [db query frame]
-  (let [[eid attr val] (binding/instantiate frame query (fn [v _f] v))
+  (let [[eid attr val] (binding/instantiate frame query)
         tx-id (if (= (:tx-id db) :latest)
                 (id/id Integer/MAX_VALUE)
                 (id/id (:tx-id db)))
@@ -324,19 +326,113 @@
   [bind]
   (into {} bind))
 
+(defn aggregate?
+  "Whether `exp` is an aggregatation expression in a find clause."
+  [exp]
+  (list? exp))
+
+(defn aggregate
+  "Given an aggregation expression `agg` and a list of frames
+  `frames`, returns the result of applying the aggregration expression
+  to the frames."
+  [agg frames]
+  (let [apply-agg (fn [agg-fn arg]
+                    (agg-fn (map #(binding/instantiate % arg)
+                                 frames)))]
+    (match agg
+      (['sum arg] :seq) (apply-agg (partial apply +) arg)
+      (['min arg] :seq) (apply-agg (partial apply min) arg)
+      (['max arg] :seq) (apply-agg (partial apply max) arg)
+      (['mean arg] :seq) (apply-agg stats/mean arg)
+      ;; avg is an alias for mean
+      (['avg arg] :seq) (apply-agg stats/mean arg)
+      (['median arg] :seq) (apply-agg stats/median arg)
+      (['mode arg] :seq) (apply-agg #(vec (stats/mode %)) arg)
+      (['stddev arg] :seq) (apply-agg stats/standard-deviation arg)
+      (['count arg] :seq) (apply-agg #(count (filter some? %)) arg)
+      (['count-distinct arg] :seq) (apply-agg #(count (set (filter some? %))) arg)
+      (['distinct arg] :seq) (apply-agg (partial apply (comp set list)) arg)
+      ([exp & _] :seq) (let [msg (format "Unknown aggregation expression %s" exp)]
+                         (throw (ex-info msg
+                                         {:code :unknown-aggregation
+                                          :aggregation (str exp)
+                                          :message msg}))))))
+
+(defn process-results
+  "Returns a list of maps where the keys are expressions and the
+  values are their values for the `frame-group`."
+  [find sort-by frame-group]
+  (into {} (for [exp (set (concat find sort-by))]
+             (cond
+               (aggregate? exp) [exp (aggregate exp frame-group)]
+               (var? exp) [exp (binding/instantiate (first frame-group) exp)]))))
+
+(defn realize-find
+  "Given a group of frames and a find clause, returns a result row."
+  [find result-map]
+  (vec (map (partial get result-map) find)))
+
+(defn sort-results
+  "Sorts a list of result maps `results` by the `sort-clause`"
+  [sort-clause sort-direction results]
+  (if (nil? sort-clause)
+    results
+    (sort-by (apply juxt (map (fn [exp] #(get % exp)) sort-clause))
+             (if (= sort-direction :desc)
+               #(comparison/cc-cmp %2 %1)
+               comparison/cc-cmp)
+             results)))
+
+(defn process-frames
+  "Processes `frames` returns from a `qeval` against the `find`
+  clause, returning a vector of query results. Results are sorted by
+  `sort-by`, it it's not nil. Aggregates frames based on any
+  aggregation expressions in the `find` and the `sort-by`."
+  [find sort-by sort-direction limit frames]
+  (let [grouping-vars (set (concat (filter var? find)
+                                   (filter var? sort-by)))
+        groupings (if (empty? grouping-vars)
+                    ;; If there's nothing to group by, just have one big group
+                    {:all frames}
+                    (group-by (apply juxt
+                                     (map (fn [var]
+                                            (fn [frame]
+                                              (binding/instantiate frame var)))
+                                          grouping-vars))
+                              frames))
+        result-maps (map (partial process-results find sort-by) (vals groupings))
+        results (map (partial realize-find find)
+                     (sort-results sort-by sort-direction result-maps))]
+    (if limit
+      (vec (take limit results))
+      (vec results))))
+
+(defn process-sort-by
+  [sort-by]
+  (if-not (nil? sort-by)
+    (let [sort-by (if (vector? sort-by) sort-by [sort-by])
+          direction (if (= (last sort-by) :desc) :desc :asc)
+          sort-by (if (#{:desc :asc} (last sort-by))
+                    (subvec sort-by 0 (dec (count sort-by)))
+                    sort-by)]
+      [direction (vec (expand-question-marks sort-by))])
+    [:asc nil]))
+
 (defn do-query
   "Runs the query `q` against `db`, returning a seq of instantiated
   find clauses for each frame"
   [db q]
-  (let [{:keys [find where rules bind]} q
+  (let [{:keys [find where rules sort-by limit bind]} q
         processed-where (process-where where)
         processed-find (vec (expand-question-marks find))
         processed-rules (process-rules rules)
+        [sort-direction processed-sort-by] (process-sort-by sort-by)
         processed-bind (process-bind bind)]
-    (map
-     (fn [frame]
-       (vec (binding/instantiate frame processed-find (fn [v _f] v))))
-     (qeval db processed-where processed-rules [processed-bind]))))
+    (process-frames processed-find
+                    processed-sort-by
+                    sort-direction
+                    limit
+                    (qeval db processed-where processed-rules [processed-bind]))))
 
 (defn query-callback [queue-backend storage-backend msg]
   (log/debug "Received query message" :message msg)
