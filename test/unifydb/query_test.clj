@@ -488,6 +488,17 @@
                 :db {:tx-id :latest}
                 :expected [["123abc" 90]
                            ["456def" 75]]}
+               {:query '{:find [?order (sum ?line-item-cost)]
+                         :where [[?o :order/id ?order]
+                                 [?li :line-item/order ?o]
+                                 [?li :line-item/item ?i]
+                                 [?li :line-item/quantity ?q]
+                                 [?i :item/cost ?cost]
+                                 [(* ?q ?coost) ?line-item-cost]]}
+                :db {:tx-id :latest}
+                :expected-error {:message "Unbound variable coost"
+                                 :code :unbound-variable
+                                 :variable "coost"}}
                {:query '{:find [?order (sum ?total)]
                          :where [[?o :order/id ?order]
                                  [?li :line-item/order ?o]
