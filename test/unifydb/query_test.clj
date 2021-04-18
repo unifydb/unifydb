@@ -455,24 +455,50 @@
                [#unifydb/id 4 :order/id "123abc" #unifydb/id 0 true]
                [#unifydb/id 5 :line-item/item #unifydb/id 1 #unifydb/id 0 true]
                [#unifydb/id 5 :line-item/quantity 2 #unifydb/id 0 true]
+               [#unifydb/id 5 :line-item/order #unifydb/id 4 #unifydb/id 0 true]
                [#unifydb/id 6 :line-item/item #unifydb/id 2 #unifydb/id 0 true]
                [#unifydb/id 6 :line-item/quantity 1 #unifydb/id 0 true]
+               [#unifydb/id 6 :line-item/order #unifydb/id 4 #unifydb/id 0 true]
                [#unifydb/id 7 :line-item/item #unifydb/id 3 #unifydb/id 0 true]
-               [#unifydb/id 7 :line-item/quantity 3 #unifydb/id 0 true]]
+               [#unifydb/id 7 :line-item/quantity 3 #unifydb/id 0 true]
+               [#unifydb/id 7 :line-item/order #unifydb/id 4 #unifydb/id 0 true]
+               [#unifydb/id 8 :order/id "456def" #unifydb/id 0 true]
+               [#unifydb/id 9 :line-item/item #unifydb/id 1 #unifydb/id 0 true]
+               [#unifydb/id 9 :line-item/quantity 1 #unifydb/id 0 true]
+               [#unifydb/id 9 :line-item/order #unifydb/id 8 #unifydb/id 0 true]
+               [#unifydb/id 10 :line-item/item #unifydb/id 2 #unifydb/id 0 true]
+               [#unifydb/id 10 :line-item/quantity 2 #unifydb/id 0 true]
+               [#unifydb/id 10 :line-item/order #unifydb/id 8 #unifydb/id 0 true]
+               [#unifydb/id 11 :line-item/item #unifydb/id 3 #unifydb/id 0 true]
+               [#unifydb/id 11 :line-item/quantity 1 #unifydb/id 0 true]
+               [#unifydb/id 11 :line-item/order #unifydb/id 8 #unifydb/id 0 true] ]
         storage-backend (store/store-facts! (store/new! (memstore/new)) facts)
         queue-backend (memqueue/new)
         query-service (query/new queue-backend storage-backend)]
     (try
       (service/start! query-service)
       (doseq [{:keys [query db expected expected-error]}
-              [{:query '{:find [?order (sum ?total)]
+              [{:query '{:find [?order (sum ?line-item-cost)]
                          :where [[?o :order/id ?order]
+                                 [?li :line-item/order ?o]
                                  [?li :line-item/item ?i]
-                                 [?li :line-item/quantify ?q]
+                                 [?li :line-item/quantity ?q]
                                  [?i :item/cost ?cost]
-                                 [(* ?q ?cost) ?total]]}
+                                 [(* ?q ?cost) ?line-item-cost]]}
                 :db {:tx-id :latest}
-                :expected [["123abc" 90]]}]]
+                :expected [["123abc" 90]
+                           ["456def" 75]]}
+               {:query '{:find [?order (sum ?total)]
+                         :where [[?o :order/id ?order]
+                                 [?li :line-item/order ?o]
+                                 [?li :line-item/item ?i]
+                                 [?li :line-item/quantity ?q]
+                                 [?i :item/cost ?cost]
+                                 [(*foo ?q ?cost) ?total]]}
+                :db {:tx-id :latest}
+                :expected-error {:message "Unknown function *foo"
+                                 :function "*foo"
+                                 :code :unknown-function}}]]
         (testing (str query)
           (if expected-error
             (is (= expected-error (:error @(util/query queue-backend db query))))
