@@ -102,6 +102,32 @@
          [])))
    frames))
 
+(defn apply-func
+  "Calls `func` on the `args` instantiated against the `frames`,
+  unifying the result with the `binding-var` and returning a seq of
+  new frames."
+  [func args binding-var frames]
+  (map
+   (fn [frame]
+     (let [instantiated (binding/instantiate
+                         frame args
+                         (fn [v _f]
+                           (let [var (var-name v)
+                                 msg (format "Unbound variable %s" var)]
+                             (throw (ex-info msg {:code :unbound-variable
+                                                  :variable (str var)
+                                                  :message msg})))))
+           func (or (safe-ns-resolve 'clojure.core func)
+                    (let [msg (format "Unknown function %s"
+                                      func)]
+                      (throw (ex-info msg
+                                      {:code :unknown-function
+                                       :function (str func)
+                                       :message msg}))))
+           result (apply func instantiated)]
+       (unify/unify-match result binding-var frame)))
+   frames))
+
 (defn cmp-fact-versions
   "Like compare, but gives false a higher priority than true"
   [f1 f2]
@@ -263,6 +289,7 @@
              [:and & conjuncts] (conjoin db conjuncts rules frames)
              [:or & disjuncts] (disjoin db disjuncts rules frames)
              [:not negatee] (negate db negatee rules frames)
+             [([func & args] :seq) binding-var] (apply-func func args binding-var frames)
              [([pred & args] :seq)] (apply-predicate db pred args rules frames)
              [:always-true] frames
              _ (simple-query db query rules frames))))
@@ -296,6 +323,8 @@
     [:and & conjuncts] `[:and ~@(map process-clause conjuncts)]
     [:or & disjuncts] `[:or ~@(map process-clause disjuncts)]
     [:not negatee] `[:not ~(process-clause negatee)]
+    [([func & args] :seq) binding-var] `[(~func ~@(map expand-question-marks args))
+                                         ~(expand-question-marks binding-var)]
     [([op & args] :seq)] `[(~op ~@(map expand-question-marks args))]
     _ (-> clause (pad-clause) (expand-question-marks))))
 
