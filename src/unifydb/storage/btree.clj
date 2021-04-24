@@ -243,8 +243,10 @@
         val {:key key :value value}
         [leaf path] (find-leaf-for (:store tree) root val [(:root-key tree)])
         modifications (insert-into tree leaf [val] path)]
-    (doseq [[key node] modifications]
-      (store/assoc! (:store tree) key node))
+    (store/write-batch! (:store tree)
+                        (map (fn [[key node]]
+                               [:assoc! key node])
+                             modifications))
     tree))
 
 (defn next-sibling
@@ -383,10 +385,12 @@
   (let [root (store/get (:store tree) (:root-key tree))
         [leaf path] (find-leaf-for (:store tree) root key [(:root-key tree)])
         modifications (delete-from tree leaf key path)]
-    (doseq [[key node] modifications]
-      (if (= node :delete)
-        (store/dissoc! (:store tree) key)
-        (store/assoc! (:store tree) key node)))
+    (store/write-batch! (:store tree)
+                        (map (fn [[key node]]
+                               (if (= node :delete)
+                                 [:dissoc! key]
+                                 [:assoc! key node]))
+                             modifications))
     tree))
 
 (defn new!

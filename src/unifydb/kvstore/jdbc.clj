@@ -1,9 +1,61 @@
 (ns unifydb.kvstore.jdbc
   "An implementation of the KV store backend based on JDBC."
-  (:require [next.jdbc :as jdbc]
+  (:require [clojure.string :as str]
+            [next.jdbc :as jdbc]
             [taoensso.nippy :as nippy]
             [unifydb.kvstore :as kvstore])
   (:refer-clojure :exclude [contains?]))
+
+(defn param-list
+  "Generates a string consisting of an opening paren, a
+  comma-separated sequence of '?'s of length `length`, and finally a
+  closing paren."
+  [length]
+  (format "(%s)" (str/join ", " (repeat length "?"))))
+
+(defn parameterized-with-coll
+  "Returns a jdbc statement vector of `query` followed by all items in
+  `coll`. `query` will be passed to (format) with a param-list of
+  length (count coll) as its first argument."
+  [query coll]
+  (vec (apply list
+              (format query (param-list (count coll)))
+              coll)))
+
+(defn jdbc-write-batch! [store operations]
+  (let [assoc-kvs (->> operations
+                       (filter #(= (first %) :assoc!))
+                       (map rest))
+        dissoc-keys (->> operations
+                         (filter #(= (first %) :dissoc!))
+                         (map (comp str first rest)))]
+    (jdbc/with-transaction [tx (:connection store)]
+      ;; TODO this would be more efficient if we batched it as 1 SQL
+      ;; call for the updates and 1 for the inserts
+      (doseq [[key val] assoc-kvs]
+        (if (kvstore/contains? store key)
+          (jdbc/execute! tx
+                         ["UPDATE unifydb_kvs SET value = ? WHERE key LIKE ?"
+                          (nippy/freeze val)
+                          (str key)])
+          (jdbc/execute! tx
+                         ["INSERT INTO unifydb_kvs VALUES (?, ?)"
+                          (str key)
+                          (nippy/freeze val)])))
+      (when-not (empty? dissoc-keys)
+        (jdbc/execute! tx
+                       (parameterized-with-coll
+                        "DELETE FROM unifydb_kvs WHERE key IN %s"
+                        dissoc-keys))))))
+
+(defn jdbc-contains-batch? [store keys]
+  (>= (:count
+       (jdbc/execute-one!
+        (:connection store)
+        (parameterized-with-coll
+         "SELECT COUNT(*) AS count FROM unifydb_kvs WHERE key IN %s"
+         (map str keys))))
+      (count keys)))
 
 (defrecord JDBCKeyValueStore [connection]
   ;; Closing the store closes the underlying connection
@@ -12,37 +64,17 @@
 
   ;; Actual KV store interface methods
   kvstore/IKeyValueStore
-  (store-get
-    [self key]
-    (when-let [row (jdbc/execute-one! (:connection self)
-                                      ["SELECT value FROM unifydb_kvs WHERE key LIKE ?"
-                                       (str key)])]
-      (nippy/thaw (:unifydb_kvs/value row))))
-  (assoc! [self key val]
-    (jdbc/execute! (:connection self) ["BEGIN TRANSACTION"])
-    (if (kvstore/contains? self key)
-      (jdbc/execute! (:connection self)
-                     ["UPDATE unifydb_kvs SET value = ? WHERE key LIKE ?"
-                      (nippy/freeze val)
-                      (str key)])
-      (jdbc/execute! (:connection self)
-                     ["INSERT INTO unifydb_kvs VALUES (?, ?)"
-                      (str key)
-                      (nippy/freeze val)]))
-    (jdbc/execute! (:connection self) ["COMMIT"])
-    self)
-  (dissoc!
-    [self key]
-    (jdbc/execute! (:connection self)
-                   ["DELETE FROM unifydb_kvs WHERE key LIKE ?"
-                    (str key)])
-    self)
-  (contains?
-    [self key]
-    (> (:count (jdbc/execute-one! (:connection self)
-                                  ["SELECT COUNT(*) AS count FROM unifydb_kvs WHERE key LIKE ?"
-                                   (str key)]))
-       0)))
+  (get-batch
+    [self keys]
+    (when-let [rows (jdbc/execute! (:connection self)
+                                   (parameterized-with-coll
+                                    "SELECT value FROM unifydb_kvs WHERE key IN %s"
+                                    (map str keys)))]
+      (map (comp nippy/thaw :unifydb_kvs/value) rows)))
+
+  (write-batch! [self operations] (jdbc-write-batch! self operations))
+
+  (contains-batch? [self keys] (jdbc-contains-batch? self keys)))
 
 (defn new!
   "Instantiate a new JDBCKeyValueStore using the `connection-uri`,
