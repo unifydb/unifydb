@@ -4,14 +4,22 @@
 
 (defrecord InMemoryKeyValueStore [state]
   storage/IKeyValueStore
-  (store-get [store key]
-    (get @(:state store) key))
-  (assoc! [store key val]
-    (swap! (:state store) assoc key val))
-  (dissoc! [store key]
-    (swap! (:state store) dissoc key))
-  (contains? [store key]
-    (map-contains? @(:state store) key)))
+  (get-batch [store keys]
+    (map @(:state store) keys))
+  (write-batch! [store operations]
+    (swap! (:state store)
+           (fn [m]
+             (let [assocs (->> operations
+                               (filter #(= (first %) :assoc!))
+                               (map (comp vec rest)))
+                   dissocs (->> operations
+                                (filter #(= (first %) :dissoc!))
+                                (map (comp first rest)))]
+               (as-> m v
+                 (into v assocs)
+                 (apply dissoc v dissocs))))))
+  (contains-batch? [store keys]
+    (every? #(map-contains? @(:state store) %) keys)))
 
 (defn new []
   (->InMemoryKeyValueStore (atom {})))
