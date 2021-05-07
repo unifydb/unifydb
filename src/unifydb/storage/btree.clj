@@ -3,7 +3,8 @@
   WRITING IS NOT THREAD SAFE, only write in the single-threaded
   transactor."
   (:require [unifydb.comparison :as comparison]
-            [unifydb.kvstore :as store])
+            [unifydb.kvstore :as store]
+            [unifydb.storecache :as storecache])
   (:import [java.util UUID]))
 
 (defn pointer?
@@ -121,7 +122,7 @@
   could contain `value` and whose second element is a vector of the
   path of node pointer keys we took to arrive at the leaf (most recent
   pointer key last)"
-  [store node value path]
+  [store-cache node value path]
   (if (leaf? node)
     [node path]
     (let [lower-sep-idx (lower-bound node value)
@@ -133,8 +134,8 @@
                            (node-get node lower-sep-idx)) (dec lower-sep-idx)
                           :else (inc lower-sep-idx))
           child-ptr (node-get node child-ptr-idx)]
-      (recur store
-             (store/get store child-ptr)
+      (recur store-cache
+             (storecache/get! store-cache child-ptr)
              value
              (conj path child-ptr)))))
 
@@ -150,12 +151,13 @@
             (let [start-idx (lower-bound-exact node prefix)]
               (if (and (node-neighbor node)
                        (prefixed-by? (peek (node-values node)) prefix))
-                (recur (store/get (:store tree) (node-neighbor node))
+                (recur (storecache/get! (:store-cache tree)
+                                        (node-neighbor node))
                        (concat acc (subvec (node-values node) start-idx)))
                 (concat acc (for [val (subvec (node-values node) start-idx)
                                   :while (prefixed-by? val prefix)] val)))))]
-    (let [root (store/get (:store tree) (:root-key tree))
-          [leaf _] (find-leaf-for (:store tree) root prefix [(:root-key tree)])]
+    (let [root (storecache/get! (:store-cache tree) (:root-key tree))
+          [leaf _] (find-leaf-for (:store-cache tree) root prefix [(:root-key tree)])]
       (vec (search-iter leaf [])))))
 
 (defn generate-node-id
@@ -169,12 +171,14 @@
   (letfn [(greatest-value [node]
             (if (not (pointer? (peek (node-values node))))
               (peek (node-values node))
-              (let [child (store/get (:store tree) (peek (node-values node)))]
+              (let [child (storecache/get! (:store-cache tree)
+                                           (peek (node-values node)))]
                 (recur child))))
           (least-value [node]
             (if (not (pointer? (first (node-values node))))
               (first (node-values node))
-              (let [child (store/get (:store tree) (first (node-values node)))]
+              (let [child (storecache/get! (:store-cache tree)
+                                           (first (node-values node)))]
                 (recur child))))
           (find-common-prefix [a b acc]
             (if (not= (first a) (first b))
@@ -219,7 +223,7 @@
                       upper-node {:values upper}
                       separator (separator-for tree lower-node upper-node)
                       parent-id (peek parent-path-from-root)
-                      parent (store/get (:store tree) parent-id)]
+                      parent (storecache/get! (:store-cache tree) parent-id)]
                   (if (empty? parent-path-from-root)
                     (let [new-upper-key ((:id-generator tree))
                           new-root [new-key separator new-upper-key]
@@ -237,24 +241,28 @@
     (insert-into-iter node value path-from-root {})))
 
 (defn insert!
-  "Inserts `value` into `tree` sorted by `key`, rebalancing the tree if necessary."
-  [tree key value]
-  (let [root (store/get (:store tree) (:root-key tree))
-        val {:key key :value value}
-        [leaf path] (find-leaf-for (:store tree) root val [(:root-key tree)])
-        modifications (insert-into tree leaf [val] path)]
-    (store/write-batch! (:store tree)
-                        (map (fn [[key node]]
-                               [:assoc! key node])
-                             modifications))
-    tree))
+  "Inserts the `kvs` into `tree`, rebalancing the tree if
+  necessary. The `kvs` should be a map of sort keys to values. Does
+  not persist the changes to the store until a call to btree/commit!"
+  [tree kvs]
+  (let [root (storecache/get! (:store-cache tree) (:root-key tree))]
+    (doseq [[key value] kvs]
+      (let [val {:key key :value value}
+            [leaf path] (find-leaf-for (:store-cache tree)
+                                       root
+                                       val
+                                       [(:root-key tree)])
+            modifications (insert-into tree leaf [val] path)]
+        (doseq [[key node] modifications]
+          (storecache/set! (:store-cache tree) key node)))))
+  tree)
 
 (defn next-sibling
   "Returns [index, next-greatest sibling key] or `nil` if the
   sibling does not exit."
   [tree path node]
   (let [parent-key (nth path (- (count path) 2))
-        parent (store/get (:store tree) parent-key)
+        parent (storecache/get! (:store-cache tree) parent-key)
         upper-val (if (leaf? node)
                     (peek (node-values node))
                     (get (node-values node) (- (node-count node) 2)))
@@ -267,7 +275,7 @@
   does not exist"
   [tree path node]
   (let [parent-key (nth path (- (count path) 2))
-        parent (store/get (:store tree) parent-key)
+        parent (storecache/get! (:store-cache tree) parent-key)
         lower-val (if (leaf? node)
                     (first (node-values node))
                     (second (node-values node)))
@@ -292,11 +300,12 @@
               (if (< (node-count new-node) min)
                 (let [[prev-idx prev-key] (prev-sibling tree path node)
                       [next-idx next-key] (next-sibling tree path node)
-                      parent (store/get (:store tree) parent-key)
-                      prev-node (and prev-key (store/get (:store tree) prev-key))
+                      parent (storecache/get! (:store-cache tree) parent-key)
+                      prev-node (and prev-key (storecache/get! (:store-cache tree)
+                                                               prev-key))
                       next-node (and next-key
                                      (<= (node-count prev-node) min)
-                                     (store/get (:store tree) next-key))]
+                                     (storecache/get! (:store-cache tree) next-key))]
                   (cond
                     ;; Pull value from previous sibling
                     (and prev-node
@@ -380,29 +389,33 @@
         (delete-from-iter node idx (inc idx) path {})))))
 
 (defn delete!
-  "Deletes the value with `key` from `tree`, rebalancing the tree if necessary."
-  [tree key]
-  (let [root (store/get (:store tree) (:root-key tree))
-        [leaf path] (find-leaf-for (:store tree) root key [(:root-key tree)])
-        modifications (delete-from tree leaf key path)]
-    (store/write-batch! (:store tree)
-                        (map (fn [[key node]]
-                               (if (= node :delete)
-                                 [:dissoc! key]
-                                 [:assoc! key node]))
-                             modifications))
-    tree))
+  "Deletes the values with `keys` from `tree`, rebalancing the tree if
+  necessary. Does not persist the changes to the store until a call to
+  btree/commit!"
+  [tree keys]
+  (let [root (storecache/get! (:store-cache tree) (:root-key tree))]
+    (doseq [key keys]
+      (let [[leaf path] (find-leaf-for (:store-cache tree)
+                                       root
+                                       key
+                                       [(:root-key tree)])
+            modifications (delete-from tree leaf key path)]
+        (doseq [[key node] modifications]
+          (if (= node :delete)
+            (storecache/delete! (:store-cache tree) key)
+            (storecache/set! (:store-cache tree) key node))))))
+  tree)
 
 (defn new!
-  "Instantiates a new `store`-backed b-tree with order
-  `order` whose root node is the value in the KV-store with key
-  `root-key`. If the root node does not exist, it is created."
-  ([store root-key order]
-   (new! store root-key order generate-node-id))
-  ([store root-key order id-generator]
-   (when-not (store/contains? store root-key)
-     (store/assoc! store root-key {:values []}))
-   {:store store
+  "Instantiates a new `store-cache`-backed b-tree with order `order`
+  whose root node is the value in the KV-store with key `root-key`. If
+  the root node does not exist, it is created."
+  ([store-cache root-key order]
+   (new! store-cache root-key order generate-node-id))
+  ([store-cache root-key order id-generator]
+   (when-not (storecache/contains? store-cache root-key)
+     (storecache/set! store-cache root-key {:values []}))
+   {:store-cache store-cache
     :order order
     :root-key root-key
     :id-generator id-generator}))
