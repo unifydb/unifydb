@@ -3,24 +3,26 @@
             [clojure.test :as t]
             [unifydb.kvstore :as store]
             [unifydb.kvstore.memory :as memstore]
-            [unifydb.storage.btree :as btree]))
+            [unifydb.storage.btree :as btree]
+            [unifydb.storecache :as storecache]))
 
 (t/deftest test-find-leaf-for
-  (let [store (memstore/->InMemoryKeyValueStore
-               (atom {"root" {:values ["0"
-                                       ["a" "b" "b"]
-                                       "1"
-                                       ["a" "b" "c"]
-                                       "2"
-                                       ["a" "b" "d"]
-                                       "3"
-                                       ["a" "e"]
-                                       "4"]}
-                      "0" {:values [["a" "a" "a" "a"]]}
-                      "1" {:values [["a" "b" "b" "a"] ["a" "b" "b" "b"]]}
-                      "2" {:values [["a" "b" "c" "a"]]}
-                      "3" {:values [["a" "b" "d" "a"]]}
-                      "4" {:values [["a" "e" "a" "b"] ["a" "e" "b" "a"]]}}))]
+  (let [store (storecache/store-cache
+               (memstore/->InMemoryKeyValueStore
+                (atom {"root" {:values ["0"
+                                        ["a" "b" "b"]
+                                        "1"
+                                        ["a" "b" "c"]
+                                        "2"
+                                        ["a" "b" "d"]
+                                        "3"
+                                        ["a" "e"]
+                                        "4"]}
+                       "0" {:values [["a" "a" "a" "a"]]}
+                       "1" {:values [["a" "b" "b" "a"] ["a" "b" "b" "b"]]}
+                       "2" {:values [["a" "b" "c" "a"]]}
+                       "3" {:values [["a" "b" "d" "a"]]}
+                       "4" {:values [["a" "e" "a" "b"] ["a" "e" "b" "a"]]}})))]
     (doseq [{:keys [value expected-node expected-path]}
             [{:value ["a" "b" "b" "a"]
               :expected-node {:values [["a" "b" "b" "a"] ["a" "b" "b" "b"]]}
@@ -43,7 +45,7 @@
       (t/testing (str "Finding leaf for " value)
         (t/is (= [expected-node expected-path]
                  (btree/find-leaf-for store
-                                      (store/get store "root")
+                                      (storecache/get! store "root")
                                       value
                                       ["root"])))))))
 
@@ -110,45 +112,47 @@
                                             {:key ["d" "a" "c"] :value 13}]}}}]]
     (let [id-counter (atom 0)
           id-generator (fn [] (str (swap! id-counter inc)))
-          store (memstore/new)
+          store (storecache/store-cache (memstore/new))
           tree (btree/new! store "root" order id-generator)]
       (doseq [{:keys [key value]} insertions]
-        (btree/insert! tree key value))
+        (btree/insert! tree {key value}))
+      (storecache/commit! (:store-cache tree))
       (t/testing (format "Insert:\n  insertions:\n%s  order: %s"
                          (with-out-str
                            (pprint/pprint insertions))
                          order)
-        (t/is (= expected-state @(:state (:store tree))))))))
+        (t/is (= expected-state @(:state (:store @(:store-cache tree)))))))))
 
 (t/deftest test-search
   (t/testing "Searching"
-    (let [store (memstore/->InMemoryKeyValueStore
-                 (atom {"root" {:values ["13" ["a" "c"] "14"]}
-                        "1" {:values [{:key ["a" "a" "b"] :value 7}
-                                      {:key ["a" "b" "a"] :value 1}]
-                             :neighbor "2"}
-                        "2" {:values [{:key ["a" "b" "c"] :value 0}] :neighbor "3"}
-                        "3" {:values [{:key ["a" "b" "d"] :value 2}] :neighbor "4"}
-                        "4" {:values [{:key ["a" "b" "e"] :value 3}] :neighbor "7"}
-                        "5" {:values ["1" ["a" "b" "c"] "2"]}
-                        "6" {:values ["3" ["a" "b" "e"] "4"]}
-                        "7" {:values [{:key ["a" "c" "a"] :value 4}] :neighbor "8"}
-                        "8" {:values [{:key ["a" "c" "b"] :value 5}] :neighbor "10"}
-                        "9" {:values ["7" ["a" "c" "b"] "8"]}
-                        "10" {:values [{:key ["a" "c" "c"] :value 6}] :neighbor "11"}
-                        "11" {:values [{:key ["a" "d" "a"] :value 8}
-                                       {:key ["a" "d" "b"] :value 11}]
-                              :neighbor "15"}
-                        "12" {:values ["10" ["a" "d"] "11"]}
-                        "13" {:values ["5" ["a" "b" "d"] "6"]}
-                        "14" {:values ["9" ["a" "c" "c"] "12" ["b"] "17"]}
-                        "15" {:values [{:key ["b" "a" "a"] :value 9}
-                                       {:key ["b" "d" "a"] :value 14}]
-                              :neighbor "16"}
-                        "16" {:values [{:key ["c" "a" "b"] :value 10}] :neighbor "18"}
-                        "17" {:values ["15" ["c"] "16" ["c" "b"] "18"]}
-                        "18" {:values [{:key ["c" "b" "a"] :value 12}
-                                       {:key ["d" "a" "c"] :value 13}]}}))
+    (let [store (storecache/store-cache
+                 (memstore/->InMemoryKeyValueStore
+                  (atom {"root" {:values ["13" ["a" "c"] "14"]}
+                         "1" {:values [{:key ["a" "a" "b"] :value 7}
+                                       {:key ["a" "b" "a"] :value 1}]
+                              :neighbor "2"}
+                         "2" {:values [{:key ["a" "b" "c"] :value 0}] :neighbor "3"}
+                         "3" {:values [{:key ["a" "b" "d"] :value 2}] :neighbor "4"}
+                         "4" {:values [{:key ["a" "b" "e"] :value 3}] :neighbor "7"}
+                         "5" {:values ["1" ["a" "b" "c"] "2"]}
+                         "6" {:values ["3" ["a" "b" "e"] "4"]}
+                         "7" {:values [{:key ["a" "c" "a"] :value 4}] :neighbor "8"}
+                         "8" {:values [{:key ["a" "c" "b"] :value 5}] :neighbor "10"}
+                         "9" {:values ["7" ["a" "c" "b"] "8"]}
+                         "10" {:values [{:key ["a" "c" "c"] :value 6}] :neighbor "11"}
+                         "11" {:values [{:key ["a" "d" "a"] :value 8}
+                                        {:key ["a" "d" "b"] :value 11}]
+                               :neighbor "15"}
+                         "12" {:values ["10" ["a" "d"] "11"]}
+                         "13" {:values ["5" ["a" "b" "d"] "6"]}
+                         "14" {:values ["9" ["a" "c" "c"] "12" ["b"] "17"]}
+                         "15" {:values [{:key ["b" "a" "a"] :value 9}
+                                        {:key ["b" "d" "a"] :value 14}]
+                               :neighbor "16"}
+                         "16" {:values [{:key ["c" "a" "b"] :value 10}] :neighbor "18"}
+                         "17" {:values ["15" ["c"] "16" ["c" "b"] "18"]}
+                         "18" {:values [{:key ["c" "b" "a"] :value 12}
+                                        {:key ["d" "a" "c"] :value 13}]}})))
           btree (btree/new! store "root" 3)]
       (t/is (= [{:key ["b" "a" "a"] :value 9}
                 {:key ["b" "d" "a"] :value 14}]
@@ -167,18 +171,20 @@
 
 (t/deftest test-delete!
   (t/testing "Deletion"
-    (let [store (memstore/->InMemoryKeyValueStore
-                 (atom {"root" {:values ["5" ["a" "b" "d"] "6"]}
-                        "1" {:values [{:key ["a" "b" "a"] :value 0}] :neighbor "2"}
-                        "2" {:values [{:key ["a" "b" "c"] :value 1}] :neighbor "3"}
-                        "3" {:values [{:key ["a" "b" "d"] :value 2}] :neighbor "4"}
-                        "5" {:values ["1" ["a" "b" "c"] "2"]}
-                        "6" {:values ["3" ["a" "b" "e"] "4" ["a" "c"] "7"]}
-                        "4" {:values [{:key ["a" "b" "e"] :value 3}] :neighbor "7"}
-                        "7" {:values [{:key ["a" "c" "a"] :value 4}
-                                      {:key ["a" "c" "b"] :value 5}]}}))
+    (let [store (storecache/store-cache
+                 (memstore/->InMemoryKeyValueStore
+                  (atom {"root" {:values ["5" ["a" "b" "d"] "6"]}
+                         "1" {:values [{:key ["a" "b" "a"] :value 0}] :neighbor "2"}
+                         "2" {:values [{:key ["a" "b" "c"] :value 1}] :neighbor "3"}
+                         "3" {:values [{:key ["a" "b" "d"] :value 2}] :neighbor "4"}
+                         "5" {:values ["1" ["a" "b" "c"] "2"]}
+                         "6" {:values ["3" ["a" "b" "e"] "4" ["a" "c"] "7"]}
+                         "4" {:values [{:key ["a" "b" "e"] :value 3}] :neighbor "7"}
+                         "7" {:values [{:key ["a" "c" "a"] :value 4}
+                                       {:key ["a" "c" "b"] :value 5}]}})))
           tree (btree/new! store "root" 3)]
-      (btree/delete! tree ["a" "c" "b"])
+      (btree/delete! tree [["a" "c" "b"]])
+      (storecache/commit! store)
       (t/is (= {"root" {:values ["5" ["a" "b" "d"] "6"]}
                 "1" {:values [{:key ["a" "b" "a"] :value 0}] :neighbor "2"}
                 "2" {:values [{:key ["a" "b" "c"] :value 1}] :neighbor "3"}
@@ -187,19 +193,21 @@
                 "6" {:values ["3" ["a" "b" "e"] "4" ["a" "c"] "7"]}
                 "4" {:values [{:key ["a" "b" "e"] :value 3}] :neighbor "7"}
                 "7" {:values [{:key ["a" "c" "a"] :value 4}]}}
-               @(:state (:store tree)))))
-    (let [store (memstore/->InMemoryKeyValueStore
-                 (atom {"root" {:values ["5" ["a" "b" "d"] "6"]}
-                        "1" {:values [{:key ["a" "b" "a"] :value 0}] :neighbor "2"}
-                        "2" {:values [{:key ["a" "b" "c"] :value 1}] :neighbor "3"}
-                        "3" {:values [{:key ["a" "b" "d"] :value 2}] :neighbor "4"}
-                        "5" {:values ["1" ["a" "b" "c"] "2"]}
-                        "6" {:values ["3" ["a" "b" "e"] "4" ["a" "c"] "7"]}
-                        "4" {:values [{:key ["a" "b" "e"] :value 3}] :neighbor "7"}
-                        "7" {:values [{:key ["a" "c" "a"] :value 4}
-                                      {:key ["a" "c" "b"] :value 5}]}}))
+               @(:state (:store @(:store-cache tree))))))
+    (let [store (storecache/store-cache
+                 (memstore/->InMemoryKeyValueStore
+                  (atom {"root" {:values ["5" ["a" "b" "d"] "6"]}
+                         "1" {:values [{:key ["a" "b" "a"] :value 0}] :neighbor "2"}
+                         "2" {:values [{:key ["a" "b" "c"] :value 1}] :neighbor "3"}
+                         "3" {:values [{:key ["a" "b" "d"] :value 2}] :neighbor "4"}
+                         "5" {:values ["1" ["a" "b" "c"] "2"]}
+                         "6" {:values ["3" ["a" "b" "e"] "4" ["a" "c"] "7"]}
+                         "4" {:values [{:key ["a" "b" "e"] :value 3}] :neighbor "7"}
+                         "7" {:values [{:key ["a" "c" "a"] :value 4}
+                                       {:key ["a" "c" "b"] :value 5}]}})))
           tree (btree/new! store "root" 3)]
-      (btree/delete! tree ["a" "b" "e"])
+      (btree/delete! tree [["a" "b" "e"]])
+      (storecache/commit! store)
       (t/is (= {"root" {:values ["5" ["a" "b" "d"] "6"]}
                 "1" {:values [{:key ["a" "b" "a"] :value 0}] :neighbor "2"}
                 "2" {:values [{:key ["a" "b" "c"] :value 1}] :neighbor "3"}
@@ -208,41 +216,42 @@
                 "6" {:values ["3" ["a" "b" "e"] "4" ["a" "c" "b"] "7"]}
                 "4" {:values [{:key ["a" "c" "a"] :value 4}] :neighbor "7"}
                 "7" {:values [{:key ["a" "c" "b"] :value 5}]}}
-               @(:state (:store tree)))))))
+               @(:state (:store @(:store-cache tree))))))))
 
 (t/deftest test-find-siblings
   (t/testing "Find siblings"
-    (let [store (memstore/->InMemoryKeyValueStore
-                 (atom {"root" {:values ["13" ["a" "c"] "14"]}
-                        "1" {:values [{:key ["a" "a" "b"] :value 7}
-                                      {:key ["a" "b" "a"] :value 1}]
-                             :neighbor "2"}
-                        "2" {:values [{:key ["a" "b" "c"] :value 0}] :neighbor "3"}
-                        "3" {:values [{:key ["a" "b" "d"] :value 2}] :neighbor "4"}
-                        "4" {:values [{:key ["a" "b" "e"] :value 3}] :neighbor "7"}
-                        "5" {:values ["1" ["a" "b" "c"] "2"]}
-                        "6" {:values ["3" ["a" "b" "e"] "4"]}
-                        "7" {:values [{:key ["a" "c" "a"] :value 4}] :neighbor "8"}
-                        "8" {:values [{:key ["a" "c" "b"] :value 5}] :neighbor "10"}
-                        "9" {:values ["7" ["a" "c" "b"] "8"]}
-                        "10" {:values [{:key ["a" "c" "c"] :value 6}] :neighbor "11"}
-                        "11" {:values [{:key ["a" "d" "a"] :value 8}
-                                       {:key ["a" "d" "b"] :value 11}]
-                              :neighbor "15"}
-                        "12" {:values ["10" ["a" "d"] "11"]}
-                        "13" {:values ["5" ["a" "b" "d"] "6"]}
-                        "14" {:values ["9" ["a" "c" "c"] "12" ["b"] "17"]}
-                        "15" {:values [{:key ["b" "a" "a"] :value 9}
-                                       {:key ["b" "d" "a"] :value 14}]
-                              :neighbor "16"}
-                        "16" {:values [{:key ["c" "a" "b"] :value 10}] :neighbor "18"}
-                        "17" {:values ["15" ["c"] "16" ["c" "b"] "18"]}
-                        "18" {:values [{:key ["c" "b" "a"] :value 12}
-                                       {:key ["d" "a" "c"] :value 13}]}}))
+    (let [store (storecache/store-cache
+                 (memstore/->InMemoryKeyValueStore
+                  (atom {"root" {:values ["13" ["a" "c"] "14"]}
+                         "1" {:values [{:key ["a" "a" "b"] :value 7}
+                                       {:key ["a" "b" "a"] :value 1}]
+                              :neighbor "2"}
+                         "2" {:values [{:key ["a" "b" "c"] :value 0}] :neighbor "3"}
+                         "3" {:values [{:key ["a" "b" "d"] :value 2}] :neighbor "4"}
+                         "4" {:values [{:key ["a" "b" "e"] :value 3}] :neighbor "7"}
+                         "5" {:values ["1" ["a" "b" "c"] "2"]}
+                         "6" {:values ["3" ["a" "b" "e"] "4"]}
+                         "7" {:values [{:key ["a" "c" "a"] :value 4}] :neighbor "8"}
+                         "8" {:values [{:key ["a" "c" "b"] :value 5}] :neighbor "10"}
+                         "9" {:values ["7" ["a" "c" "b"] "8"]}
+                         "10" {:values [{:key ["a" "c" "c"] :value 6}] :neighbor "11"}
+                         "11" {:values [{:key ["a" "d" "a"] :value 8}
+                                        {:key ["a" "d" "b"] :value 11}]
+                               :neighbor "15"}
+                         "12" {:values ["10" ["a" "d"] "11"]}
+                         "13" {:values ["5" ["a" "b" "d"] "6"]}
+                         "14" {:values ["9" ["a" "c" "c"] "12" ["b"] "17"]}
+                         "15" {:values [{:key ["b" "a" "a"] :value 9}
+                                        {:key ["b" "d" "a"] :value 14}]
+                               :neighbor "16"}
+                         "16" {:values [{:key ["c" "a" "b"] :value 10}] :neighbor "18"}
+                         "17" {:values ["15" ["c"] "16" ["c" "b"] "18"]}
+                         "18" {:values [{:key ["c" "b" "a"] :value 12}
+                                        {:key ["d" "a" "c"] :value 13}]}})))
           btree (btree/new! store "root" 3)]
-      (t/is (= [2 "11"] (btree/next-sibling btree ["root" "14" "12" "10"] (store/get store "10"))))
-      (t/is (= nil (btree/prev-sibling btree ["root" "14" "12" "10"] (store/get store "10"))))
-      (t/is (= [4 "17"] (btree/next-sibling btree ["root" "14" "12"] (store/get store "12"))))
-      (t/is (= nil (btree/next-sibling btree ["root" "13" "6"] (store/get store "6"))))
-      (t/is (= [0 "9"] (btree/prev-sibling btree ["root" "14" "12"] (store/get store "12"))))
-      (t/is (= nil (btree/prev-sibling btree ["root" "14" "9"] (store/get store "9")))))))
+      (t/is (= [2 "11"] (btree/next-sibling btree ["root" "14" "12" "10"] (storecache/get! store "10"))))
+      (t/is (= nil (btree/prev-sibling btree ["root" "14" "12" "10"] (storecache/get! store "10"))))
+      (t/is (= [4 "17"] (btree/next-sibling btree ["root" "14" "12"] (storecache/get! store "12"))))
+      (t/is (= nil (btree/next-sibling btree ["root" "13" "6"] (storecache/get! store "6"))))
+      (t/is (= [0 "9"] (btree/prev-sibling btree ["root" "14" "12"] (storecache/get! store "12"))))
+      (t/is (= nil (btree/prev-sibling btree ["root" "14" "9"] (storecache/get! store "9")))))))

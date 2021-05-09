@@ -245,16 +245,16 @@
   necessary. The `kvs` should be a map of sort keys to values. Does
   not persist the changes to the store until a call to btree/commit!"
   [tree kvs]
-  (let [root (storecache/get! (:store-cache tree) (:root-key tree))]
-    (doseq [[key value] kvs]
-      (let [val {:key key :value value}
-            [leaf path] (find-leaf-for (:store-cache tree)
-                                       root
-                                       val
-                                       [(:root-key tree)])
-            modifications (insert-into tree leaf [val] path)]
-        (doseq [[key node] modifications]
-          (storecache/set! (:store-cache tree) key node)))))
+  (doseq [[key value] kvs]
+    (let [root (storecache/get! (:store-cache tree) (:root-key tree))
+          val {:key key :value value}
+          [leaf path] (find-leaf-for (:store-cache tree)
+                                     root
+                                     val
+                                     [(:root-key tree)])
+          modifications (insert-into tree leaf [val] path)]
+      (doseq [[key node] modifications]
+        (storecache/set! (:store-cache tree) key node))))
   tree)
 
 (defn next-sibling
@@ -393,17 +393,17 @@
   necessary. Does not persist the changes to the store until a call to
   btree/commit!"
   [tree keys]
-  (let [root (storecache/get! (:store-cache tree) (:root-key tree))]
-    (doseq [key keys]
-      (let [[leaf path] (find-leaf-for (:store-cache tree)
-                                       root
-                                       key
-                                       [(:root-key tree)])
-            modifications (delete-from tree leaf key path)]
-        (doseq [[key node] modifications]
-          (if (= node :delete)
-            (storecache/delete! (:store-cache tree) key)
-            (storecache/set! (:store-cache tree) key node))))))
+  (doseq [key keys]
+    (let [root (storecache/get! (:store-cache tree) (:root-key tree))
+          [leaf path] (find-leaf-for (:store-cache tree)
+                                     root
+                                     key
+                                     [(:root-key tree)])
+          modifications (delete-from tree leaf key path)]
+      (doseq [[key node] modifications]
+        (if (= node :delete)
+          (storecache/delete! (:store-cache tree) key)
+          (storecache/set! (:store-cache tree) key node)))))
   tree)
 
 (defn new!
