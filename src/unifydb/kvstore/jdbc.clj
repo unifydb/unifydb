@@ -3,7 +3,6 @@
   (:require [clojure.string :as str]
             [next.jdbc :as jdbc]
             [taoensso.nippy :as nippy]
-            [unifydb.kvstore :as kvstore]
             [unifydb.kvstore.backend :as kvstore-backend])
   (:refer-clojure :exclude [contains?]))
 
@@ -34,7 +33,7 @@
       ;; TODO this would be more efficient if we batched it as 1 SQL
       ;; call for the updates and 1 for the inserts
       (doseq [[key val] assoc-kvs]
-        (if (kvstore/contains? store key)
+        (if (kvstore-backend/contains-all? store [key])
           (jdbc/execute! tx
                          ["UPDATE unifydb_kvs SET value = ? WHERE key LIKE ?"
                           (nippy/freeze val)
