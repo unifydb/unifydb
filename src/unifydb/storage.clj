@@ -10,7 +10,8 @@
   (get (:indices store) index))
 
 (defn store-facts!
-  "Puts `facts` into the indexes of the `store`, returning `store`."
+  "Puts `facts` into the indexes of the `store`, returning
+  `store`. Facts are persisted in an atomic transaction."
   [store facts]
   (doseq [[eid attr value txid added? :as fact] facts]
     (btree/insert! (index store :eavt)
@@ -24,6 +25,7 @@
       (btree/insert! (index store :vaet)
                      [value attr eid txid added?]
                      fact)))
+  (kvstore/commit! (:kvstore store))
   store)
 
 (defn get-matching-facts
@@ -56,7 +58,11 @@
   "Returns a new storage backend, creating the indices in the
   `kvstore` if they don't exist."
   [kvstore]
-  {:kvstore kvstore
-   :indices {:eavt (btree/new! kvstore "eavt" 500)
-             :avet (btree/new! kvstore "avet" 500)
-             :vaet (btree/new! kvstore "vaet" 500)}})
+  (let [eavt (btree/new! kvstore "eavt" 500)
+        avet (btree/new! kvstore "avet" 500)
+        vaet (btree/new! kvstore "vaet" 500)]
+    (kvstore/commit! kvstore)
+    {:kvstore kvstore
+     :indices {:eavt eavt
+               :avet avet
+               :vaet vaet}}))

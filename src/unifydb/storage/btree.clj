@@ -237,7 +237,9 @@
     (insert-into-iter node value path-from-root {})))
 
 (defn insert!
-  "Inserts `value` into `tree` sorted by `key`, rebalancing the tree if necessary."
+  "Inserts `value` into `tree` sorted by `key`, rebalancing the tree
+  if necessary. Changes are not committed until a call to
+  (kvstore/commit!) on the backing store object."
   [tree key value]
   (let [root (store/get (:store tree) (:root-key tree))
         val {:key key :value value}
@@ -380,7 +382,9 @@
         (delete-from-iter node idx (inc idx) path {})))))
 
 (defn delete!
-  "Deletes the value with `key` from `tree`, rebalancing the tree if necessary."
+  "Deletes the value with `key` from `tree`, rebalancing the tree if
+  necessary. Changes are not committed until a call to
+  (kvstore/commi!) on the backing store object."
   [tree key]
   (let [root (store/get (:store tree) (:root-key tree))
         [leaf path] (find-leaf-for (:store tree) root key [(:root-key tree)])
@@ -396,7 +400,8 @@
 (defn new!
   "Instantiates a new `store`-backed b-tree with order
   `order` whose root node is the value in the KV-store with key
-  `root-key`. If the root node does not exist, it is created."
+  `root-key`. If the root node does not exist, it is enqueued for
+  creation. Call (kvstore/commit!) to persist the new root node."
   ([store root-key order]
    (new! store root-key order generate-node-id))
   ([store root-key order id-generator]

@@ -4,6 +4,7 @@
             [unifydb.query :as query]
             [unifydb.service :as service]
             [unifydb.storage :as store]
+            [unifydb.kvstore :as kvstore]
             [unifydb.kvstore.memory :as memstore]
             [unifydb.util :as util]))
 
@@ -19,7 +20,7 @@
                [#unifydb/id 2 :address [:cambridge [:mass :ave] 78] #unifydb/id 2 true]
                [#unifydb/id 2 :address [:cambridge [:mass :ave] 78] #unifydb/id 3 false]
                [#unifydb/id 3 :address [:slumerville [:davis :square] 42] #unifydb/id 4 true]]
-        storage-backend (store/store-facts! (store/new! (memstore/new)) facts)
+        storage-backend (store/store-facts! (store/new! (kvstore/new (memstore/new))) facts)
         queue-backend (memqueue/new)
         query-service (query/new queue-backend storage-backend)
         db-latest {:tx-id #unifydb/id 4}
@@ -74,7 +75,7 @@
                [#unifydb/id 2 :address [:cambridge [:mass :ave] 78] #unifydb/id 2 true]
                [#unifydb/id 2 :address [:cambridge [:mass :ave] 78] #unifydb/id 3 false]
                [#unifydb/id 3 :address [:slumerville [:davis :square] 42] #unifydb/id 4 true]]
-        storage-backend (store/store-facts! (store/new! (memstore/new)) facts)
+        storage-backend (store/store-facts! (store/new! (kvstore/new (memstore/new))) facts)
         queue-backend (memqueue/new)
         query-service (query/new queue-backend storage-backend)
         db {:tx-id #unifydb/id 4}]
@@ -122,7 +123,7 @@
                [#unifydb/id 2 :address [:cambridge [:mass :ave] 78] #unifydb/id 2 true]
                [#unifydb/id 2 :address [:cambridge [:mass :ave] 78] #unifydb/id 3 false]
                [#unifydb/id 3 :address [:slumerville [:davis :square] 42] #unifydb/id 4 true]]
-        storage-backend (store/store-facts! (store/new! (memstore/new)) facts)
+        storage-backend (store/store-facts! (store/new! (kvstore/new (memstore/new))) facts)
         queue-backend (memqueue/new)
         query-service (query/new queue-backend storage-backend)
         db {:tx-id #unifydb/id 4}]
@@ -158,7 +159,7 @@
                [#unifydb/id 4 :lucky-number 7 #unifydb/id 3 true]
                [#unifydb/id 4 :lucky-number 9 #unifydb/id 4 true]
                [#unifydb/id 4 :lucky-number 9 #unifydb/id 5 false]]
-        storage-backend (store/store-facts! (store/new! (memstore/new)) facts)
+        storage-backend (store/store-facts! (store/new! (kvstore/new (memstore/new))) facts)
         queue-backend (memqueue/new)
         query-service (query/new queue-backend storage-backend)]
     (try
@@ -186,7 +187,7 @@
                [#unifydb/id 2 :address [:cambridge [:mass :ave] 78] #unifydb/id 2 true]
                [#unifydb/id 2 :address [:cambridge [:mass :ave] 78] #unifydb/id 3 false]
                [#unifydb/id 3 :address [:slumerville [:davis :square] 42] #unifydb/id 4 true]]
-        storage-backend (store/store-facts! (store/new! (memstore/new)) facts)
+        storage-backend (store/store-facts! (store/new! (kvstore/new (memstore/new))) facts)
         queue-backend (memqueue/new)
         query-service (query/new queue-backend storage-backend)]
     (try
@@ -259,7 +260,7 @@
                [#unifydb/id 2 :address [:cambridge [:mass :ave] 78] #unifydb/id 2 true]
                [#unifydb/id 2 :address [:cambridge [:mass :ave] 78] #unifydb/id 3 false]
                [#unifydb/id 3 :address [:slumerville [:davis :square] 42] #unifydb/id 4 true]]
-        storage-backend (store/store-facts! (store/new! (memstore/new)) facts)
+        storage-backend (store/store-facts! (store/new! (kvstore/new (memstore/new))) facts)
         queue-backend (memqueue/new)
         query-service (query/new queue-backend storage-backend)
         db-latest {:tx-id :latest}]
@@ -283,7 +284,7 @@
                [#unifydb/id 2 :doc "Second transaction" #unifydb/id 2 true]
                [#unifydb/id 1 :address "78 Mass Ave, Cambridge MA" #unifydb/id 2 false]
                [#unifydb/id 1 :address "10 Ridge Road, Slumerville MA" #unifydb/id 2 true]]
-        storage-backend (store/store-facts! (store/new! (memstore/new)) facts)
+        storage-backend (store/store-facts! (store/new! (kvstore/new (memstore/new))) facts)
         queue-backend (memqueue/new)
         query-service (query/new queue-backend storage-backend)]
     (try
@@ -323,7 +324,7 @@
                [#unifydb/id 4 :employee/name "Lem E. Tweakit" #unifydb/id 0 true]
                [#unifydb/id 4 :employee/age 32 #unifydb/id 0 true]
                [#unifydb/id 4 :employee/role [:computer :programmer] #unifydb/id 0 true] ]
-        storage-backend (store/store-facts! (store/new! (memstore/new)) facts)
+        storage-backend (store/store-facts! (store/new! (kvstore/new (memstore/new))) facts)
         queue-backend (memqueue/new)
         query-service (query/new queue-backend storage-backend)]
     (try
@@ -472,7 +473,7 @@
                [#unifydb/id 11 :line-item/item #unifydb/id 3 #unifydb/id 0 true]
                [#unifydb/id 11 :line-item/quantity 1 #unifydb/id 0 true]
                [#unifydb/id 11 :line-item/order #unifydb/id 8 #unifydb/id 0 true] ]
-        storage-backend (store/store-facts! (store/new! (memstore/new)) facts)
+        storage-backend (store/store-facts! (store/new! (kvstore/new (memstore/new))) facts)
         queue-backend (memqueue/new)
         query-service (query/new queue-backend storage-backend)]
     (try

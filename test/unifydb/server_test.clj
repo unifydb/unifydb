@@ -12,6 +12,7 @@
             [unifydb.cache.memory :as memcache]
             [unifydb.config :as config]
             [unifydb.edn :as edn]
+            [unifydb.kvstore :as kvstore]
             [unifydb.kvstore.memory :as memstore]
             [unifydb.messagequeue :as queue]
             [unifydb.messagequeue.memory :as memq]
@@ -24,7 +25,7 @@
 (defmacro with-server [[req-fn store-name queue-name token-header-name] txs & body]
   `(config/with-config {:secret "secret"}
      (let [~queue-name (memq/new)
-           ~store-name (memstore/new)
+           ~store-name (kvstore/new (memstore/new))
            query# (query/new ~queue-name (store/new! ~store-name))
            transact# (transact/new ~queue-name (store/new! ~store-name))
            cache# (memcache/new)
