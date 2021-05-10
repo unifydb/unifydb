@@ -1,10 +1,10 @@
 (ns unifydb.kvstore
   "Key-value store protocol. Implementations must support string keys
   and arbitrary EDN values. Operates under a batching mechanism
-  whereby changes are first stage and must be committed via the
-  commit! function to persist them. Note that changes to a particular
-  kvstore instance are immediately visible via get, even before they
-  are committed."
+  whereby changes are first staged and must be committed via the
+  (commit!) function to persist them. Note that changes to a
+  particular kvstore instance are immediately visible via (get), even
+  before they are committed."
   (:refer-clojure :exclude [get assoc! dissoc!] :rename {contains? map-contains?})
   (:require [clojure.core.match :as match]
             [clojure.set :as set]
