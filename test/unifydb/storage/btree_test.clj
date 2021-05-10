@@ -3,11 +3,10 @@
             [clojure.test :as t]
             [unifydb.kvstore :as store]
             [unifydb.kvstore.memory :as memstore]
-            [unifydb.storage.btree :as btree]
-            [unifydb.storecache :as storecache]))
+            [unifydb.storage.btree :as btree]))
 
 (t/deftest test-find-leaf-for
-  (let [store (storecache/store-cache
+  (let [store (store/new
                (memstore/->InMemoryKeyValueStore
                 (atom {"root" {:values ["0"
                                         ["a" "b" "b"]
@@ -45,7 +44,7 @@
       (t/testing (str "Finding leaf for " value)
         (t/is (= [expected-node expected-path]
                  (btree/find-leaf-for store
-                                      (storecache/get! store "root")
+                                      (store/get store "root")
                                       value
                                       ["root"])))))))
 
@@ -112,20 +111,20 @@
                                             {:key ["d" "a" "c"] :value 13}]}}}]]
     (let [id-counter (atom 0)
           id-generator (fn [] (str (swap! id-counter inc)))
-          store (storecache/store-cache (memstore/new))
+          store (store/new (memstore/new))
           tree (btree/new! store "root" order id-generator)]
       (doseq [{:keys [key value]} insertions]
-        (btree/insert! tree {key value}))
-      (storecache/commit! (:store-cache tree))
+        (btree/insert! tree key value))
+      (store/commit! (:store tree))
       (t/testing (format "Insert:\n  insertions:\n%s  order: %s"
                          (with-out-str
                            (pprint/pprint insertions))
                          order)
-        (t/is (= expected-state @(:state (:store @(:store-cache tree)))))))))
+        (t/is (= expected-state @(:state (:backend @(:store tree)))))))))
 
 (t/deftest test-search
   (t/testing "Searching"
-    (let [store (storecache/store-cache
+    (let [store (store/new
                  (memstore/->InMemoryKeyValueStore
                   (atom {"root" {:values ["13" ["a" "c"] "14"]}
                          "1" {:values [{:key ["a" "a" "b"] :value 7}
@@ -171,7 +170,7 @@
 
 (t/deftest test-delete!
   (t/testing "Deletion"
-    (let [store (storecache/store-cache
+    (let [store (store/new
                  (memstore/->InMemoryKeyValueStore
                   (atom {"root" {:values ["5" ["a" "b" "d"] "6"]}
                          "1" {:values [{:key ["a" "b" "a"] :value 0}] :neighbor "2"}
@@ -183,8 +182,8 @@
                          "7" {:values [{:key ["a" "c" "a"] :value 4}
                                        {:key ["a" "c" "b"] :value 5}]}})))
           tree (btree/new! store "root" 3)]
-      (btree/delete! tree [["a" "c" "b"]])
-      (storecache/commit! store)
+      (btree/delete! tree ["a" "c" "b"])
+      (store/commit! store)
       (t/is (= {"root" {:values ["5" ["a" "b" "d"] "6"]}
                 "1" {:values [{:key ["a" "b" "a"] :value 0}] :neighbor "2"}
                 "2" {:values [{:key ["a" "b" "c"] :value 1}] :neighbor "3"}
@@ -193,8 +192,8 @@
                 "6" {:values ["3" ["a" "b" "e"] "4" ["a" "c"] "7"]}
                 "4" {:values [{:key ["a" "b" "e"] :value 3}] :neighbor "7"}
                 "7" {:values [{:key ["a" "c" "a"] :value 4}]}}
-               @(:state (:store @(:store-cache tree))))))
-    (let [store (storecache/store-cache
+               @(:state (:backend @(:store tree))))))
+    (let [store (store/new
                  (memstore/->InMemoryKeyValueStore
                   (atom {"root" {:values ["5" ["a" "b" "d"] "6"]}
                          "1" {:values [{:key ["a" "b" "a"] :value 0}] :neighbor "2"}
@@ -206,8 +205,8 @@
                          "7" {:values [{:key ["a" "c" "a"] :value 4}
                                        {:key ["a" "c" "b"] :value 5}]}})))
           tree (btree/new! store "root" 3)]
-      (btree/delete! tree [["a" "b" "e"]])
-      (storecache/commit! store)
+      (btree/delete! tree ["a" "b" "e"])
+      (store/commit! store)
       (t/is (= {"root" {:values ["5" ["a" "b" "d"] "6"]}
                 "1" {:values [{:key ["a" "b" "a"] :value 0}] :neighbor "2"}
                 "2" {:values [{:key ["a" "b" "c"] :value 1}] :neighbor "3"}
@@ -216,11 +215,11 @@
                 "6" {:values ["3" ["a" "b" "e"] "4" ["a" "c" "b"] "7"]}
                 "4" {:values [{:key ["a" "c" "a"] :value 4}] :neighbor "7"}
                 "7" {:values [{:key ["a" "c" "b"] :value 5}]}}
-               @(:state (:store @(:store-cache tree))))))))
+               @(:state (:backend @(:store tree))))))))
 
 (t/deftest test-find-siblings
   (t/testing "Find siblings"
-    (let [store (storecache/store-cache
+    (let [store (store/new
                  (memstore/->InMemoryKeyValueStore
                   (atom {"root" {:values ["13" ["a" "c"] "14"]}
                          "1" {:values [{:key ["a" "a" "b"] :value 7}
@@ -249,9 +248,9 @@
                          "18" {:values [{:key ["c" "b" "a"] :value 12}
                                         {:key ["d" "a" "c"] :value 13}]}})))
           btree (btree/new! store "root" 3)]
-      (t/is (= [2 "11"] (btree/next-sibling btree ["root" "14" "12" "10"] (storecache/get! store "10"))))
-      (t/is (= nil (btree/prev-sibling btree ["root" "14" "12" "10"] (storecache/get! store "10"))))
-      (t/is (= [4 "17"] (btree/next-sibling btree ["root" "14" "12"] (storecache/get! store "12"))))
-      (t/is (= nil (btree/next-sibling btree ["root" "13" "6"] (storecache/get! store "6"))))
-      (t/is (= [0 "9"] (btree/prev-sibling btree ["root" "14" "12"] (storecache/get! store "12"))))
-      (t/is (= nil (btree/prev-sibling btree ["root" "14" "9"] (storecache/get! store "9")))))))
+      (t/is (= [2 "11"] (btree/next-sibling btree ["root" "14" "12" "10"] (store/get store "10"))))
+      (t/is (= nil (btree/prev-sibling btree ["root" "14" "12" "10"] (store/get store "10"))))
+      (t/is (= [4 "17"] (btree/next-sibling btree ["root" "14" "12"] (store/get store "12"))))
+      (t/is (= nil (btree/next-sibling btree ["root" "13" "6"] (store/get store "6"))))
+      (t/is (= [0 "9"] (btree/prev-sibling btree ["root" "14" "12"] (store/get store "12"))))
+      (t/is (= nil (btree/prev-sibling btree ["root" "14" "9"] (store/get store "9")))))))

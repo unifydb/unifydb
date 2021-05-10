@@ -1,12 +1,12 @@
 (ns unifydb.kvstore.memory
-  (:require [unifydb.kvstore :as storage])
+  (:require [unifydb.kvstore.backend :as store-backend])
   (:refer-clojure :rename {contains? map-contains?}))
 
 (defrecord InMemoryKeyValueStore [state]
-  storage/IKeyValueStore
-  (get-batch [store keys]
+  store-backend/IKeyValueStoreBackend
+  (get-all [store keys]
     (map @(:state store) keys))
-  (write-batch! [store operations]
+  (write-all! [store operations]
     (swap! (:state store)
            (fn [m]
              (let [assocs (->> operations
@@ -18,7 +18,7 @@
                (as-> m v
                  (into v assocs)
                  (apply dissoc v dissocs))))))
-  (contains-batch? [store keys]
+  (contains-all? [store keys]
     (every? #(map-contains? @(:state store) %) keys)))
 
 (defn new []

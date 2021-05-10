@@ -2,7 +2,6 @@
   (:require [unifydb.facts :as facts]
             [unifydb.id :as id]
             [unifydb.kvstore :as kvstore]
-            [unifydb.storecache :as storecache]
             [unifydb.storage.btree :as btree]))
 
 (defn index
@@ -11,28 +10,22 @@
   (get (:indices store) index))
 
 (defn store-facts!
-  "Puts `facts` into the indexes of the `store`, returning `store`."
+  "Puts `facts` into the indexes of the `store`, returning
+  `store`. Facts are persisted in an atomic transaction."
   [store facts]
-  (let [eavt-kvs (map
-                  (fn [[eid attr value txid added? :as fact]]
-                    [[eid attr value txid added?] fact])
-                  facts)
-        avet-kvs (map
-                  (fn [[eid attr value txid added? :as fact]]
-                    [[attr value eid txid added?] fact])
-                  facts)
-        vaet-kvs (filter
-                  (complement nil?)
-                  (map
-                   (fn [[eid attr value txid added? :as fact]]
-                     ;; Only index backreferences to other entities in VAET
-                     (when (id/id? value)
-                       [[value attr eid txid added?] fact]))
-                   facts))]
-    (btree/insert! (index store :eavt) eavt-kvs)
-    (btree/insert! (index store :avet) avet-kvs)
-    (btree/insert! (index store :vaet) vaet-kvs)
-    (storecache/commit! (:store-cache store)))
+  (doseq [[eid attr value txid added? :as fact] facts]
+    (btree/insert! (index store :eavt)
+                   [eid attr value txid added?]
+                   fact)
+    (btree/insert! (index store :avet)
+                   [attr value eid txid added?]
+                   fact)
+    ;; Only index backreferences to other entities in VAET
+    (when (id/id? value)
+      (btree/insert! (index store :vaet)
+                     [value attr eid txid added?]
+                     fact)))
+  (kvstore/commit! (:kvstore store))
   store)
 
 (defn get-matching-facts
@@ -65,11 +58,11 @@
   "Returns a new storage backend, creating the indices in the
   `kvstore` if they don't exist."
   [kvstore]
-  (let [store-cache (storecache/store-cache kvstore)
-        indices {:eavt (btree/new! store-cache "eavt" 500)
-                 :avet (btree/new! store-cache "avet" 500)
-                 :vaet (btree/new! store-cache "vaet" 500)}]
-    (storecache/commit! store-cache)
+  (let [eavt (btree/new! kvstore "eavt" 500)
+        avet (btree/new! kvstore "avet" 500)
+        vaet (btree/new! kvstore "vaet" 500)]
+    (kvstore/commit! kvstore)
     {:kvstore kvstore
-     :store-cache store-cache
-     :indices indices}))
+     :indices {:eavt eavt
+               :avet avet
+               :vaet vaet}}))

@@ -25,6 +25,7 @@
             [unifydb.cache.memory :as memcache]
             [unifydb.config :as config]
             [unifydb.id]
+            [unifydb.kvstore :as kvstore]
             [unifydb.kvstore.memory :as memstore]
             [unifydb.messagequeue :as queue :refer [publish subscribe]]
             [unifydb.messagequeue.memory :as memq]
@@ -46,7 +47,8 @@
 
 (defn make-state []
   (let [queue (memq/new)
-        kvstore (memstore/new)
+        memstore (memstore/new)
+        kvstore (kvstore/new memstore)
         store (store/new! kvstore)
         cache (memcache/new)]
     {:queue queue

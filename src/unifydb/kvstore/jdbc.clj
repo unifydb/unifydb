@@ -3,7 +3,8 @@
   (:require [clojure.string :as str]
             [next.jdbc :as jdbc]
             [taoensso.nippy :as nippy]
-            [unifydb.kvstore :as kvstore])
+            [unifydb.kvstore :as kvstore]
+            [unifydb.kvstore.backend :as kvstore-backend])
   (:refer-clojure :exclude [contains?]))
 
 (defn param-list
@@ -63,8 +64,8 @@
   (close [self] (.close (:connection self)))
 
   ;; Actual KV store interface methods
-  kvstore/IKeyValueStore
-  (get-batch
+  kvstore-backend/IKeyValueStoreBackend
+  (get-all
     [self keys]
     (when-let [rows (jdbc/execute! (:connection self)
                                    (parameterized-with-coll
@@ -72,9 +73,9 @@
                                     (map str keys)))]
       (map (comp nippy/thaw :unifydb_kvs/value) rows)))
 
-  (write-batch! [self operations] (jdbc-write-batch! self operations))
+  (write-all! [self operations] (jdbc-write-batch! self operations))
 
-  (contains-batch? [self keys] (jdbc-contains-batch? self keys)))
+  (contains-all? [self keys] (jdbc-contains-batch? self keys)))
 
 (defn new!
   "Instantiate a new JDBCKeyValueStore using the `connection-uri`,
