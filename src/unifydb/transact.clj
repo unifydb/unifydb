@@ -20,6 +20,40 @@
   ;; TODO add current user to tx facts
   [[:unifydb/add "unifydb.tx" :unifydb/txInstant (System/currentTimeMillis)]])
 
+(defn map-form->add-forms
+  "Transforms a map-form transaction statement into a list of add operations."
+  [map-form]
+  (let [id (or (:unifydb/id map-form)
+               (str (UUID/randomUUID)))
+        map-form (dissoc map-form :unifydb/id)]
+    (mapcat (fn [[attr val]]
+              (cond
+                (map? val) (let [child-id (or (:unifydb/id val)
+                                              (str (UUID/randomUUID)))
+                                 child (assoc val :unifydb/id child-id)]
+                             (conj (map-form->add-forms child)
+                                   [:unifydb/add id attr child-id]))
+                (and (sequential? val)
+                     (every? map? val)) (mapcat
+                                         (fn [child]
+                                           (let [child-id (or (:unifydb/id child)
+                                                              (str (UUID/randomUUID)))
+                                                 child (assoc child :unifydb/id child-id)]
+                                             (conj (map-form->add-forms child)
+                                                   [:unifydb/add id attr child-id])))
+                                         val)
+                :else [[:unifydb/add id attr val]]))
+            map-form)))
+
+(defn expand-map-forms
+  "Expands map items in `tx-data` to `:unifydb/add` statements."
+  [tx-data]
+  (mapcat (fn [tx-stmt]
+            (if (map? tx-stmt)
+              (map-form->add-forms tx-stmt)
+              [tx-stmt]))
+          tx-data))
+
 (defn process-tx-data
   "Turns a list of transaction statements in the form
    [<db operation> <entity> <attribute> <value>] into
@@ -65,7 +99,8 @@
   "Does all necessary processing of `tx-data` and sends it off to the storage backend."
   [storage-backend tx-data]
   (let [with-tx (into tx-data (make-new-tx-facts))
-        transformed (transforms/apply-transforms with-tx)
+        expanded (expand-map-forms with-tx)
+        transformed (transforms/apply-transforms expanded)
         raw-facts (process-tx-data transformed)
         ids (gen-temp-ids storage-backend raw-facts)
         facts (resolve-temp-ids ids raw-facts)
