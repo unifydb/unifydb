@@ -8,13 +8,14 @@
             [unifydb.facts :refer [fact-entity fact-attribute fact-added?]]
             [unifydb.id :as id]
             [unifydb.messagequeue :as queue]
+            [unifydb.query.pull :as pull]
             [unifydb.rules :refer [rule-body rule-conclusion]]
             [unifydb.schema :as schema]
             [unifydb.service :as service]
             [unifydb.statistics :as stats]
             [unifydb.storage :as store]
             [unifydb.unify :as unify]
-            [unifydb.util :as util])
+            [unifydb.util :as u])
   (:import [clojure.lang ExceptionInfo]))
 
 (declare qeval do-query)
@@ -67,7 +68,7 @@
    frames))
 
 (defn safe-ns-resolve
-  "Like ns-resolve but never returns `'clojure.core/eval`"
+  "Like ns-resolve but never returns `'clojure.core/eval`."
   [ns sym]
   (let [resolved (ns-resolve ns sym)]
     (when (not= resolved #'clojure.core/eval)
@@ -75,7 +76,7 @@
 
 (defn apply-predicate
   "Applies the `pred` to the `args` in the context of `frames`,
-  returning a seq of frames"
+  returning a seq of frames."
   [_db pred args _rules frames]
   (mapcat
    (fn [frame]
@@ -129,7 +130,7 @@
    frames))
 
 (defn cmp-fact-versions
-  "Like compare, but gives false a higher priority than true"
+  "Like compare, but gives false a higher priority than true."
   [f1 f2]
   (match [f1 f2]
     [false true] 1
@@ -163,6 +164,18 @@
                acc)
              (rest sorted-facts)))))
 
+(defn get-cardinalities
+  [db attrs]
+  (let [schemas (u/join
+                 (do-query db (schema/make-schema-query attrs)))]
+    (reduce (fn [acc attr]
+              (if-let [cardinality
+                       (get-in schemas [attr :unifydb/cardinality])]
+                (assoc acc attr cardinality)
+                acc))
+            {}
+            (keys schemas))))
+
 (defn process-facts
   "Filters out any facts that have been retracted and
    handles attribute cardinality."
@@ -174,16 +187,7 @@
                    (juxt fact-entity fact-attribute)
                    facts)
           attrs (set (map #'fact-attribute facts))
-          schemas (util/join
-                   (do-query db (schema/make-schema-query attrs)))
-          cardinalities
-          (reduce (fn [acc attr]
-                    (if-let [cardinality
-                             (get-in schemas [attr :unifydb/cardinality])]
-                      (assoc acc attr cardinality)
-                      acc))
-                  {}
-                  (keys schemas))]
+          cardinalities (get-cardinalities db attrs)]
       (mapcat
        (fn [attr-group]
          (let [sorted-facts (reverse (sort cmp-fact-versions attr-group))
@@ -295,29 +299,15 @@
              _ (simple-query db query rules frames))))
 
 (defn pad-clause
-  "Ensures the clause is a 5-tuple by padding it out with _s if necessary"
+  "Ensures the clause is a 5-tuple by padding it out with _s if necessary."
   [clause]
   (take 5 (concat clause (repeat '_))))
 
-(defn map-over-symbols [proc exp]
-  (cond
-    (and (sequential? exp) (seq exp))
-    (conj (map-over-symbols proc (rest exp))
-          (map-over-symbols proc (first exp)))
-    (symbol? exp) (proc exp)
-    :else exp))
-
-(defn expand-question-mark [sym]
-  (let [chars (str sym)]
-    (if (= "?" (subs chars 0 1))
-      ['? (symbol (subs chars 1))]
-      sym)))
-
 (defn expand-question-marks [where]
-  (map-over-symbols #'expand-question-mark where))
+  (u/map-over-symbols #'u/expand-question-mark where pull/pull-exp?))
 
 (defn process-clause
-  "Processes a clause by expanding variables and padding it out to a 5-tuple"
+  "Processes a clause by expanding variables and padding it out to a 5-tuple."
   [clause]
   (match (vec clause)
     [:and & conjuncts] `[:and ~@(map process-clause conjuncts)]
@@ -331,7 +321,7 @@
 (defn process-where
   "Processes a where clause by wrapping the whole clause in an :and
    and making sure each clause is a 5-tuple, padding them out with _s
-   if necessary"
+   if necessary."
   [where]
   (conj
    (map process-clause where)
@@ -388,13 +378,17 @@
                                           :message msg}))))))
 
 (defn process-results
-  "Returns a list of maps where the keys are expressions and the
-  values are their values for the `frame-group`."
+  "Returns a map where the keys are expressions and the values are
+  their values for the `frame-group`."
   [find sort-by frame-group]
-  (into {} (for [exp (set (concat find sort-by))]
-             (cond
-               (aggregate? exp) [exp (aggregate exp frame-group)]
-               (var? exp) [exp (binding/instantiate (first frame-group) exp)]))))
+  (into {} (map
+            (fn [exp]
+              (cond
+                (pull/pull-exp? exp) [exp (binding/instantiate (first frame-group)
+                                                               (pull/pull-entity exp))]
+                (aggregate? exp) [exp (aggregate exp frame-group)]
+                (var? exp) [exp (binding/instantiate (first frame-group) exp)]))
+            (set (concat find sort-by)))))
 
 (defn realize-find
   "Given a group of frames and a find clause, returns a result row."
@@ -402,7 +396,7 @@
   (vec (map (partial get result-map) find)))
 
 (defn sort-results
-  "Sorts a list of result maps `results` by the `sort-clause`"
+  "Sorts a list of result maps `results` by the `sort-clause`."
   [sort-clause sort-direction results]
   (if (nil? sort-clause)
     results
@@ -412,12 +406,44 @@
                comparison/cc-cmp)
              results)))
 
+(defn do-pull
+  [db find result-maps]
+  (let [pull-exps (filter pull/pull-exp? find)]
+    (if (seq pull-exps)
+      (let [ids (into {} (map (fn [exp]
+                                [exp (map #(get % exp) result-maps)])
+                              pull-exps))
+            queries (u/mapm (fn [exp ids]
+                              [exp (pull/make-pull-query (pull/pull-query exp) ids)])
+                            ids)
+            pull-results (u/mapm (fn [exp query]
+                                   [exp (do-query db (:query query))])
+                                 queries)
+            pull-attrs (set (mapcat pull/pull-exp-attrs pull-exps))
+            cardinalities (get-cardinalities db pull-attrs)
+            parsed (u/mapm (fn [exp results]
+                             (let [{:keys [query depth]} (get queries exp)]
+                               [exp (pull/parse-pull-rows results
+                                                          (expand-question-marks (:find query))
+                                                          depth
+                                                          cardinalities)]))
+                           pull-results)]
+        (map (fn [result-map]
+               (apply assoc result-map
+                      (mapcat (fn [pull-exp]
+                                (let [id (get result-map pull-exp)
+                                      results (get parsed pull-exp)]
+                                  [pull-exp (get results id)]))
+                              pull-exps)))
+             result-maps))
+      result-maps)))
+
 (defn process-frames
   "Processes `frames` returns from a `qeval` against the `find`
   clause, returning a vector of query results. Results are sorted by
   `sort-by`, it it's not nil. Aggregates frames based on any
   aggregation expressions in the `find` and the `sort-by`."
-  [find sort-by sort-direction limit frames]
+  [db find sort-by sort-direction limit frames]
   (let [grouping-vars (set (concat (filter var? find)
                                    (filter var? sort-by)))
         groupings (if (empty? grouping-vars)
@@ -430,6 +456,8 @@
                                           grouping-vars))
                               frames))
         result-maps (map (partial process-results find sort-by) (vals groupings))
+        ;; TODO apply limit and sort before pulling or realizing results
+        result-maps (do-pull db find result-maps)
         results (map (partial realize-find find)
                      (sort-results sort-by sort-direction result-maps))]
     (if limit
@@ -447,17 +475,26 @@
       [direction (vec (expand-question-marks sort-by))])
     [:asc nil]))
 
+(defn process-find [find]
+  (vec (map (fn [exp]
+              (if (pull/pull-exp? exp)
+                (pull/pull-exp (expand-question-marks (pull/pull-entity exp))
+                               (pull/pull-query exp))
+                (expand-question-marks exp)))
+            find)))
+
 (defn do-query
   "Runs the query `q` against `db`, returning a seq of instantiated
-  find clauses for each frame"
+  find clauses for each frame."
   [db q]
   (let [{:keys [find where rules sort-by limit bind]} q
         processed-where (process-where where)
-        processed-find (vec (expand-question-marks find))
+        processed-find (process-find find)
         processed-rules (process-rules rules)
         [sort-direction processed-sort-by] (process-sort-by sort-by)
         processed-bind (process-bind bind)]
-    (process-frames processed-find
+    (process-frames db
+                    processed-find
                     processed-sort-by
                     sort-direction
                     limit

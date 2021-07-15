@@ -517,3 +517,47 @@
             (is (= expected (:results @(util/query queue-backend db query)))))))
       (finally
         (service/stop! query-service)))))
+
+(deftest doc-store-queries
+  (let [facts [[#unifydb/id 2 :name "Alice" #unifydb/id 1 true]
+               [#unifydb/id 2 :favorite-color "red" #unifydb/id 1 true]
+               [#unifydb/id 2 :friends #unifydb/id 3 #unifydb/id 1 true]
+               [#unifydb/id 2 :friends #unifydb/id 4 #unifydb/id 1 true]
+               [#unifydb/id 3 :name "Bob" #unifydb/id 1 true]
+               [#unifydb/id 3 :favorite-color "green" #unifydb/id 1 true]
+               [#unifydb/id 4 :name "Carl" #unifydb/id 1 true]
+               [#unifydb/id 4 :favorite-color "yellow" #unifydb/id 1 true]
+               [#unifydb/id 5 :unifydb/schema :friends #unifydb/id 1 true]
+               [#unifydb/id 5 :unifydb/cardinality :cardinality/many #unifydb/id 1 true]
+               [#unifydb/id 2 :status #unifydb/id 6 #unifydb/id 1 true]
+               [#unifydb/id 6 :text "Feeling good" #unifydb/id 1 true]
+               [#unifydb/id 4 :status #unifydb/id 7 #unifydb/id 1 true]
+               [#unifydb/id 7 :text "Feeling bad" #unifydb/id 1 true]]
+        storage-backend (store/store-facts! (store/new! (kvstore/new (memstore/new))) facts)
+        queue-backend (memqueue/new)
+        query-service (query/new queue-backend storage-backend)]
+    (try
+      (service/start! query-service)
+      (doseq [{:keys [query db expected expected-error]}
+              [{:query '{:find [(pull ?e [:name
+                                          :favorite-color
+                                          {:status [:text]}
+                                          {:friends [:name
+                                                     :favorite-color
+                                                     {:status [:text]}]}])]
+                         :where [[?e :name "Alice"]]}
+                :db {:tx-id :latest}
+                :expected [[{:name "Alice"
+                             :favorite-color "red"
+                             :status {:text "Feeling good"}
+                             :friends [{:name "Carl"
+                                        :favorite-color "yellow"
+                                        :status {:text "Feeling bad"}}
+                                       {:name "Bob"
+                                        :favorite-color "green"}]}]]}]]
+        (testing (str query)
+          (if expected-error
+            (is (= expected-error (:error @(util/query queue-backend db query))))
+            (is (= expected (:results @(util/query queue-backend db query)))))))
+      (finally
+        (service/stop! query-service)))))
