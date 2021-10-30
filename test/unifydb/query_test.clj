@@ -554,7 +554,20 @@
                                         :favorite-color "yellow"
                                         :status {:text "Feeling bad"}}
                                        {:name "Bob"
-                                        :favorite-color "green"}]}]]}]]
+                                        :favorite-color "green"}]}]]}
+               {:db {:tx-id :latest}
+                :query '{:find [(pull ?e [:name])]
+                         :where [[?e :name _]]}
+                :expected [[{:name "Alice"}]
+                           [{:name "Bob"}]
+                           [{:name "Carl"}]]}
+               {:db {:tx-id :latest}
+                :query '{:find [(pull ?e [:name])
+                                (pull ?e [:favorite-color])]
+                         :where [[?e _ _]
+                                 [(= ?e #unifydb/id 2)]]}
+                :expected [[{:name "Alice"}
+                            {:favorite-color "red"}]]}]]
         (testing (str query)
           (if expected-error
             (is (= expected-error (:error @(util/query queue-backend db query))))

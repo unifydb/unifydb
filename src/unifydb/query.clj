@@ -445,6 +445,8 @@
   aggregation expressions in the `find` and the `sort-by`."
   [db find sort-by sort-direction limit frames]
   (let [grouping-vars (set (concat (filter var? find)
+                                   (map pull/pull-entity
+                                        (filter pull/pull-exp? find))
                                    (filter var? sort-by)))
         groupings (if (empty? grouping-vars)
                     ;; If there's nothing to group by, just have one big group
