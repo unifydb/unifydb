@@ -55,3 +55,30 @@
        (s/filter #(= (:id %) id) v)
        (s/take! v)
        (d/chain v #(do (s/close! results) %))))))
+
+(defn map-over-symbols
+  ([proc exp] (map-over-symbols proc exp (fn [_exp] false)))
+  ([proc exp skip-fn]
+   (cond
+     (and (sequential? exp) (seq exp) (not (skip-fn exp)))
+     (conj (map-over-symbols proc (rest exp) skip-fn)
+           (map-over-symbols proc (first exp) skip-fn))
+     (symbol? exp) (proc exp)
+     :else exp)))
+
+(defn expand-question-mark [sym]
+  (let [chars (str sym)]
+    (if (= "?" (subs chars 0 1))
+      ['? (symbol (subs chars 1))]
+      sym)))
+
+(defn deep-merge [a & maps]
+  (if (map? a)
+    (apply merge-with deep-merge a maps)
+    (apply merge-with deep-merge maps)))
+
+(defn mapm
+  "Maps `f` over the map `m`, returning a new map. `f` should take a
+  key and value and return a key-value tuple."
+  [f m]
+  (into {} (map (fn [[k v]] (f k v)) m)))

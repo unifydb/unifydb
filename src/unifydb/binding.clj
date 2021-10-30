@@ -1,6 +1,9 @@
 (ns unifydb.binding
-  (:refer-clojure :exclude [var?])
+  (:refer-clojure :exclude [var? var])
   (:require [unifydb.util :as util]))
+
+(defn var [name]
+  ['? (symbol name)])
 
 (defn var?
   "Checks if `exp` is a variable.
