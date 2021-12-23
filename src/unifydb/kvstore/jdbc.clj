@@ -1,6 +1,7 @@
 (ns unifydb.kvstore.jdbc
   "An implementation of the KV store backend based on JDBC."
   (:require [clojure.string :as str]
+            [manifold.deferred :as d]
             [next.jdbc :as jdbc]
             [taoensso.nippy :as nippy]
             [unifydb.kvstore.backend :as kvstore-backend])
@@ -29,33 +30,38 @@
         dissoc-keys (->> operations
                          (filter #(= (first %) :dissoc!))
                          (map (comp str first rest)))]
-    (jdbc/with-transaction [tx (:connection store)]
-      ;; TODO this would be more efficient if we batched it as 1 SQL
-      ;; call for the updates and 1 for the inserts
-      (doseq [[key val] assoc-kvs]
-        (if (kvstore-backend/contains-all? store [key])
+    (d/future
+      (jdbc/with-transaction [tx (:connection store)]
+        ;; TODO this would be more efficient if we batched it as 1 SQL
+        ;; call for the updates and 1 for the inserts
+        (doseq [[key val] assoc-kvs]
+          ;; Dereferencing here doesn't make this synchronous since we
+          ;; are in a future block
+          (if @(kvstore-backend/contains-all? store [key])
+            (jdbc/execute! tx
+                           ["UPDATE unifydb_kvs SET value = ? WHERE key LIKE ?"
+                            (nippy/freeze val)
+                            (str key)])
+            (jdbc/execute! tx
+                           ["INSERT INTO unifydb_kvs VALUES (?, ?)"
+                            (str key)
+                            (nippy/freeze val)])))
+        (when-not (empty? dissoc-keys)
           (jdbc/execute! tx
-                         ["UPDATE unifydb_kvs SET value = ? WHERE key LIKE ?"
-                          (nippy/freeze val)
-                          (str key)])
-          (jdbc/execute! tx
-                         ["INSERT INTO unifydb_kvs VALUES (?, ?)"
-                          (str key)
-                          (nippy/freeze val)])))
-      (when-not (empty? dissoc-keys)
-        (jdbc/execute! tx
-                       (parameterized-with-coll
-                        "DELETE FROM unifydb_kvs WHERE key IN %s"
-                        dissoc-keys))))))
+                         (parameterized-with-coll
+                          "DELETE FROM unifydb_kvs WHERE key IN %s"
+                          dissoc-keys))))
+      ;; If the transaction fails, the future will have already failed here
+      true)))
 
 (defn jdbc-contains-batch? [store keys]
-  (>= (:count
-       (jdbc/execute-one!
-        (:connection store)
-        (parameterized-with-coll
-         "SELECT COUNT(*) AS count FROM unifydb_kvs WHERE key IN %s"
-         (map str keys))))
-      (count keys)))
+  (d/chain (d/future (jdbc/execute-one!
+                      (:connection store)
+                      (parameterized-with-coll
+                       "SELECT COUNT(*) AS count FROM unifydb_kvs WHERE key IN %s"
+                       (map str keys))))
+           :count
+           #(>= % (count keys))))
 
 (defrecord JDBCKeyValueStore [connection]
   ;; Closing the store closes the underlying connection
@@ -66,11 +72,12 @@
   kvstore-backend/IKeyValueStoreBackend
   (get-all
     [self keys]
-    (when-let [rows (jdbc/execute! (:connection self)
-                                   (parameterized-with-coll
-                                    "SELECT value FROM unifydb_kvs WHERE key IN %s"
-                                    (map str keys)))]
-      (map (comp nippy/thaw :unifydb_kvs/value) rows)))
+    (d/chain (d/future
+               (jdbc/execute! (:connection self)
+                              (parameterized-with-coll
+                               "SELECT value FROM unifydb_kvs WHERE key IN %s"
+                               (map str keys))))
+             (partial map (comp nippy/thaw :unifydb_kvs/value))))
 
   (write-all! [self operations] (jdbc-write-batch! self operations))
 
