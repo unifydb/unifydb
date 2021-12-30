@@ -28,21 +28,22 @@
   "Returns a deferred containing a seq of values in kvstore for each
   of the `ks`. Values not in the store will be represented by `nil`."
   [store ks]
-  (let [state (swap! store
-                     (fn [state]
-                       (assoc state :cache
-                              (d/let-flow [cache (:cache state)
-                                           deleted (:deleted state)
-                                           to-retrieve (set/difference (set ks)
-                                                                       (set (keys cache))
-                                                                       deleted)
-                                           retrieved (when-not (empty? to-retrieve)
-                                                       (kvstore-backend/get-all
-                                                        (:backend state)
-                                                        to-retrieve))]
-                                (if-not (empty? retrieved)
-                                  (merge cache retrieved)
-                                  cache)))))]
+  (let [state (swap!
+               store
+               (fn [state]
+                 (assoc state :cache
+                        (d/let-flow [cache (:cache state)
+                                     deleted (:deleted state)
+                                     to-retrieve (set/difference (set ks)
+                                                                 (set (keys cache))
+                                                                 deleted)
+                                     retrieved (when-not (empty? to-retrieve)
+                                                 (kvstore-backend/get-all
+                                                  (:backend state)
+                                                  to-retrieve))]
+                          (if-not (empty? retrieved)
+                            (merge cache retrieved)
+                            cache)))))]
     (d/let-flow [deleted (:deleted state)
                  cache (:cache state)]
       (map (fn [key]
@@ -51,7 +52,8 @@
            ks))))
 
 (defn get
-  "Retrieves the value associated with `key` in `store`."
+  "Retrieves the value associated with `key` in `store`, returning a
+  deferred."
   [store key]
   (d/chain (get-batch store [key]) first))
 
@@ -92,6 +94,8 @@
   store)
 
 (defn contains-batch?
+  "Returns a deferred with a boolean that is `true` if `store`
+  contains all the `ks`."
   [store ks]
   (d/let-flow [state @store
                cache (:cache state)
@@ -112,12 +116,15 @@
       cached))))
 
 (defn contains? [store key]
+  "Returns a deferred with a boolean that is `true` if `store`
+  contains `key`."
   (contains-batch? store [key]))
 
 ;; TODO add a way to discard enqueued modifications
 
 (defn commit!
-  "Persists enqueued modifications and deletions to the KV store."
+  "Persists enqueued modifications and deletions to the KV
+  store. Returns a deferred containing the store object."
   [store]
   (d/let-flow [state @store
                cache (:cache state)
