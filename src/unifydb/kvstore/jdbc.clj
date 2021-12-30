@@ -75,9 +75,13 @@
     (d/chain (d/future
                (jdbc/execute! (:connection self)
                               (parameterized-with-coll
-                               "SELECT value FROM unifydb_kvs WHERE key IN %s"
+                               "SELECT key, value FROM unifydb_kvs WHERE key IN %s"
                                (map str keys))))
-             (partial map (comp nippy/thaw :unifydb_kvs/value))))
+             (fn [rows]
+               (map (fn [row] [(:unifydb_kvs/key row)
+                               (nippy/thaw (:unifydb_kvs/value row))])
+                    rows))
+             #(into {} %)))
 
   (write-all! [self operations] (jdbc-write-batch! self operations))
 

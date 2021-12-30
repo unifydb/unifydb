@@ -5,9 +5,11 @@
   (commit!) function to persist them. Note that changes to a
   particular kvstore instance are immediately visible via (get), even
   before they are committed."
-  (:refer-clojure :exclude [get assoc! dissoc!] :rename {contains? map-contains?})
+  (:refer-clojure :exclude [assoc! dissoc!] :rename {contains? map-contains?
+                                                     get map-get})
   (:require [clojure.core.match :as match]
             [clojure.set :as set]
+            [manifold.deferred :as d]
             [unifydb.kvstore.backend :as kvstore-backend]))
 
 ;; Note: if we want to support horizontal transactor scaling at some
@@ -23,30 +25,35 @@
 ;; contention extremely likely.
 
 (defn get-batch
+  "Returns a deferred containing a seq of values in kvstore for each
+  of the `ks`. Values not in the store will be represented by `nil`."
   [store ks]
   (let [state (swap! store
                      (fn [state]
-                       (let [to-retrieve
-                             (set/difference (set ks)
-                                             (set (keys (:cache state)))
-                                             (:deleted state))]
-                         (if-not (empty? to-retrieve)
-                           (assoc state :cache
-                                  (apply assoc (:cache state)
-                                         (interleave to-retrieve
-                                                     (kvstore-backend/get-all
-                                                      (:backend state)
-                                                      to-retrieve))))
-                           state))))]
-    (map (fn [key]
-           (when-not ((:deleted state) key)
-             ((:cache state) key)))
-         ks)))
+                       (assoc state :cache
+                              (d/let-flow [cache (:cache state)
+                                           deleted (:deleted state)
+                                           to-retrieve (set/difference (set ks)
+                                                                       (set (keys cache))
+                                                                       deleted)
+                                           retrieved (when-not (empty? to-retrieve)
+                                                       (kvstore-backend/get-all
+                                                        (:backend state)
+                                                        to-retrieve))]
+                                (if-not (empty? retrieved)
+                                  (merge cache retrieved)
+                                  cache)))))]
+    (d/let-flow [deleted (:deleted state)
+                 cache (:cache state)]
+      (map (fn [key]
+             (when-not (deleted key)
+               (cache key)))
+           ks))))
 
 (defn get
   "Retrieves the value associated with `key` in `store`."
   [store key]
-  (first (get-batch store [key])))
+  (d/chain (get-batch store [key]) first))
 
 (defn assoc!
   "Sets `key` to `value` in the store cache but does not actually
@@ -55,9 +62,9 @@
   (swap! store
          (fn [state]
            (-> state
-               (assoc-in [:cache key] value)
-               (assoc :modified (conj (:modified state) key))
-               (assoc :deleted (disj (:deleted state) key)))))
+               (assoc :cache (d/chain (:cache state) #(assoc % key value)))
+               (assoc :modified (d/chain (:modified state) #(conj % key)))
+               (assoc :deleted (d/chain (:deleted state) #(disj % key))))))
   store)
 
 (defn dissoc!
@@ -66,9 +73,9 @@
   (swap! store
          (fn [state]
            (-> state
-               (assoc :cache (dissoc (:cache state) key))
-               (assoc :modified (disj (:modified state) key))
-               (assoc :deleted (conj (:deleted state) key)))))
+               (assoc :cache (d/chain (:cache state) #(dissoc % key)))
+               (assoc :modified (d/chain (:modified state) #(disj % key)))
+               (assoc :deleted (d/chain (:deleted state) #(conj % key))))))
   store)
 
 (defn write-batch!
@@ -86,42 +93,52 @@
 
 (defn contains-batch?
   [store ks]
-  (let [state @store
-        uncached (set/difference (set ks)
-                                 (set (keys (:cache state)))
-                                 (:deleted state))
-        cached (set/difference (set ks) uncached)]
+  (d/let-flow [state @store
+               cache (:cache state)
+               deleted (:deleted state)
+               uncached (set/difference (set ks)
+                                        (set (keys cache))
+                                        deleted)
+               cached (set/difference (set ks) uncached)
+               contains-uncached? (kvstore-backend/contains-all?
+                                   (:backend state)
+                                   uncached)]
     (and
-     (kvstore-backend/contains-all? (:backend state) uncached)
+     contains-uncached?
      (every?
       (fn [key]
-        (and (map-contains? (:cache state) key)
-             (not ((:deleted state) key))))
+        (and (map-contains? cache key)
+             (not (deleted key))))
       cached))))
 
 (defn contains? [store key]
   (contains-batch? store [key]))
 
+;; TODO add a way to discard enqueued modifications
+
 (defn commit!
   "Persists enqueued modifications and deletions to the KV store."
   [store]
-  (let [state @store
-        modifications (map (fn [key]
-                             [:assoc! key (get-in state [:cache key])])
-                           (:modified state))
-        deletions (map (fn [key] [:dissoc! key]) (:deleted state))]
-    (kvstore-backend/write-all! (:backend state)
-                                (concat modifications deletions))
+  (d/let-flow [state @store
+               cache (:cache state)
+               modified (:modified state)
+               deleted (:deleted state)
+               modifications (map (fn [key]
+                                    [:assoc! key (map-get cache key)])
+                                  modified)
+               deletions (map (fn [key] [:dissoc! key]) deleted)
+               _ (kvstore-backend/write-all! (:backend state)
+                                             (concat modifications deletions))]
     (swap! store
-           (fn [cache]
-             (-> cache
-                 (assoc :cache {})
-                 (assoc :modified #{})
-                 (assoc :deleted #{}))))
+           (fn [s]
+             (-> s
+                 (assoc :cache (d/success-deferred {}))
+                 (assoc :modified (d/success-deferred #{}))
+                 (assoc :deleted (d/success-deferred #{})))))
     store))
 
 (defn new [backend]
   (atom {:backend backend
-         :cache {}
-         :modified #{}
-         :deleted #{}}))
+         :cache (d/success-deferred {})
+         :modified (d/success-deferred #{})
+         :deleted (d/success-deferred #{})}))

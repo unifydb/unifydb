@@ -2,8 +2,9 @@
 
 (defprotocol IKeyValueStoreBackend
   (get-all [store keys]
-    "Returns a deferred containing a seq of the values that correspond
-    with `keys` in the `store`.")
+    "Returns a deferred containing a map of `keys` and their
+    corresponding values. If a key isn't in the store it will not be
+    present in the result.")
   (write-all! [store operations]
     "Performs multiple operations on `store` atomically, where each
     operation is either [:assoc! <key> <value>] or [:dissoc!

@@ -6,7 +6,7 @@
 (defrecord InMemoryKeyValueStore [state]
   store-backend/IKeyValueStoreBackend
   (get-all [store keys]
-    (d/success-deferred (map @(:state store) keys)))
+    (d/success-deferred (select-keys @state keys)))
   (write-all! [store operations]
     (d/future
       (swap! (:state store)
